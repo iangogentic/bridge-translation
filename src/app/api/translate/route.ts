@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
       fileUrl,
       targetLanguage: targetLang,
       domain,
+      mimeType,
     });
 
     // Calculate confidence

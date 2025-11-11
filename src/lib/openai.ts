@@ -1,6 +1,6 @@
 /**
  * OpenAI GPT-4o integration for document translation and summarization
- * Uses structured output to ensure consistent response format
+ * Uses OpenAI Files API for PDFs (serverless-compatible)
  */
 
 import OpenAI from 'openai';
@@ -56,7 +56,7 @@ export const translationSchema = {
           description: 'Any costs, fees, or financial obligations',
         },
       },
-      required: ['purpose', 'actions'],
+      required: ['purpose', 'actions', 'due_dates', 'costs'],
       additionalProperties: false,
     },
     detected_language: {
@@ -90,13 +90,16 @@ Output format: Return ONLY valid JSON matching the schema.`;
 
 /**
  * Translate and summarize a document using GPT-4o
+ * Uses OpenAI Files API for PDFs (serverless-compatible)
+ * Uses Vision API for images
  */
 export async function translateDocument(params: {
   fileUrl: string;
   targetLanguage?: string;
   domain?: 'school' | 'healthcare' | 'legal' | 'government';
+  mimeType?: string;
 }): Promise<TranslationResult> {
-  const { fileUrl, targetLanguage = 'en', domain } = params;
+  const { fileUrl, targetLanguage = 'en', domain, mimeType } = params;
 
   // Build user message with context
   let userPrompt = `Target language: ${targetLanguage}`;
@@ -106,47 +109,126 @@ export async function translateDocument(params: {
   userPrompt += '\n\nPlease translate this document and provide a summary.';
 
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: userPrompt },
-            {
-              type: 'image_url',
-              image_url: { url: fileUrl },
-            },
-          ],
+    console.log('Sending document to GPT-4o for translation...');
+    console.log('File URL:', fileUrl);
+    console.log('MIME type:', mimeType);
+
+    const isPDF = mimeType === 'application/pdf';
+
+    if (isPDF) {
+      // Download PDF and upload to OpenAI Files API
+      console.log('Downloading PDF from Vercel Blob...');
+      const response = await fetch(fileUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      console.log('Uploading PDF to OpenAI Files API...');
+      const file = await openai.files.create({
+        file: new File([buffer], 'document.pdf', { type: 'application/pdf' }),
+        purpose: 'user_data',
+      });
+
+      console.log(`File uploaded with ID: ${file.id}`);
+
+      // Use file in chat completion
+      const response2 = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'file' as const,
+                file: { file_id: file.id },
+              },
+              {
+                type: 'text',
+                text: userPrompt,
+              },
+            ],
+          },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'BridgeTranslation',
+            schema: translationSchema,
+            strict: true,
+          },
         },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'BridgeTranslation',
-          schema: translationSchema,
-          strict: true,
+        temperature: 0.3,
+        max_tokens: 4000,
+      });
+
+      const content = response2.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      console.log('Translation completed successfully');
+
+      const result: TranslationResult = JSON.parse(content);
+
+      // Validate the result has required fields
+      if (!result.translation_html || !result.summary || !result.detected_language) {
+        throw new Error('Invalid response structure from OpenAI');
+      }
+
+      return result;
+
+    } else {
+      // For images, use Vision API directly
+      console.log('Using Vision API for image...');
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: userPrompt },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: fileUrl,
+                  detail: 'high',
+                },
+              },
+            ],
+          },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'BridgeTranslation',
+            schema: translationSchema,
+            strict: true,
+          },
         },
-      },
-      temperature: 0.3, // Lower temperature for more consistent outputs
-      max_tokens: 4000,
-    });
+        temperature: 0.3,
+        max_tokens: 4000,
+      });
 
-    const content = response.choices[0]?.message?.content;
+      const content = response.choices[0]?.message?.content;
 
-    if (!content) {
-      throw new Error('No response from OpenAI');
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      console.log('Translation completed successfully');
+
+      const result: TranslationResult = JSON.parse(content);
+
+      // Validate the result has required fields
+      if (!result.translation_html || !result.summary || !result.detected_language) {
+        throw new Error('Invalid response structure from OpenAI');
+      }
+
+      return result;
     }
-
-    const result: TranslationResult = JSON.parse(content);
-
-    // Validate the result has required fields
-    if (!result.translation_html || !result.summary || !result.detected_language) {
-      throw new Error('Invalid response structure from OpenAI');
-    }
-
-    return result;
 
   } catch (error) {
     console.error('OpenAI translation error:', error);

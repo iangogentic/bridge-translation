@@ -43,6 +43,7 @@ export async function GET(
     return NextResponse.json({
       id: document.id,
       filename: document.filename,
+      blobUrl: document.blobUrl,
       mimeType: document.mimeType,
       fileSize: document.fileSize,
       pageCount: document.pageCount,
