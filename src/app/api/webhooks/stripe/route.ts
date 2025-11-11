@@ -97,7 +97,7 @@ async function handleCheckoutCompleted(session: any) {
   console.log(`✅ Checkout completed for ${email}`);
 
   // Fetch subscription details from Stripe
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const subscription: any = await stripe.subscriptions.retrieve(subscriptionId);
   const priceId = subscription.items.data[0]?.price.id;
 
   // Determine plan name from price ID
@@ -268,7 +268,8 @@ async function handleCheckoutCompleted(session: any) {
 /**
  * Handle subscription updates (plan changes, status changes)
  */
-async function handleSubscriptionUpdated(subscription: any) {
+async function handleSubscriptionUpdated(subscriptionData: any) {
+  const subscription: any = subscriptionData;
   const customerId = subscription.customer;
   const subscriptionId = subscription.id;
 
