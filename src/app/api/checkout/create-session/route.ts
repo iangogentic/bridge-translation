@@ -19,6 +19,24 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const MARKETING_URL = process.env.MARKETING_SITE_URL || 'https://bridge.com';
 
 export async function POST(req: NextRequest) {
+  // Handle CORS
+  const origin = req.headers.get('origin');
+  const allowedOrigins = [
+    'https://bridge-website-theta.vercel.app',
+    'https://bridgemarketingsite.vercel.app',
+    'http://localhost:3001', // For local development
+  ];
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (origin && allowedOrigins.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type';
+  }
+
   try {
     const body = await req.json();
     const { email, priceId, returnUrl } = body;
@@ -27,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (!email || typeof email !== 'string') {
       return NextResponse.json(
         { error: 'Email is required' },
-        { status: 400 }
+        { status: 400, headers }
       );
     }
 
@@ -36,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (!emailRegex.test(email)) {
       return NextResponse.json(
         { error: 'Invalid email format' },
-        { status: 400 }
+        { status: 400, headers }
       );
     }
 
@@ -76,7 +94,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       url: session.url,
       sessionId: session.id,
-    });
+    }, { headers });
   } catch (error: any) {
     console.error('Checkout session creation failed:', error);
 
@@ -84,13 +102,33 @@ export async function POST(req: NextRequest) {
     if (error.type === 'StripeInvalidRequestError') {
       return NextResponse.json(
         { error: 'Invalid payment configuration. Please contact support.' },
-        { status: 400 }
+        { status: 400, headers }
       );
     }
 
     return NextResponse.json(
       { error: 'Failed to create checkout session' },
-      { status: 500 }
+      { status: 500, headers }
     );
   }
+}
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin');
+  const allowedOrigins = [
+    'https://bridge-website-theta.vercel.app',
+    'https://bridgemarketingsite.vercel.app',
+    'http://localhost:3001',
+  ];
+
+  const headers: HeadersInit = {};
+
+  if (origin && allowedOrigins.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type';
+  }
+
+  return new NextResponse(null, { status: 200, headers });
 }
