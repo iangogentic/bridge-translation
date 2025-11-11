@@ -32,7 +32,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('translation');
-  const [document, setDocument] = useState<DocumentData | null>(null);
+  const [docData, setDocData] = useState<DocumentData | null>(null);
   const [result, setResult] = useState<ResultData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +43,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         // Fetch document metadata
         const docRes = await fetch(`/api/doc/${id}`);
         if (!docRes.ok) throw new Error('Document not found');
-        const docData = await docRes.json();
-        setDocument(docData);
+        const documentData = await docRes.json();
+        setDocData(documentData);
 
         // Fetch translation result
         const resultRes = await fetch(`/api/doc/${id}/result`);
@@ -120,7 +120,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  if (error || !document || !result) {
+  if (error || !docData || !result) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md mx-auto text-center">
@@ -152,9 +152,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               >
                 ← Back to Upload
               </button>
-              <h1 className="text-2xl font-bold text-gray-900">{document.filename}</h1>
+              <h1 className="text-2xl font-bold text-gray-900">{docData.filename}</h1>
               <p className="text-sm text-gray-600 mt-1">
-                Uploaded {new Date(document.uploadedAt).toLocaleString()}
+                Uploaded {new Date(docData.uploadedAt).toLocaleString()}
                 {result.confidence && ` • Confidence: ${result.confidence}%`}
               </p>
             </div>
