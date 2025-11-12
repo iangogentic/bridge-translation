@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${APP_URL}/auth/setup?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${APP_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: returnUrl || `${MARKETING_URL}/?checkout=cancelled`,
       metadata: {
         email: email,
