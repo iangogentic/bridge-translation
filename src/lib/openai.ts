@@ -1,11 +1,10 @@
 /**
  * OpenAI GPT-4o integration for document translation and summarization
- * Uses PDF.js for PDF text extraction (serverless-compatible)
- * Uses Vision API for images
+ * Uses Vision API for all document types (images)
+ * For PDFs: Client must convert to images before uploading
  */
 
 import OpenAI from 'openai';
-import * as pdfjsLib from 'pdfjs-dist';
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn('OPENAI_API_KEY is not set - OpenAI features will not work');
@@ -91,47 +90,9 @@ Guidelines:
 Output format: Return ONLY valid JSON matching the schema.`;
 
 /**
- * Extract text from PDF using PDF.js (serverless-compatible)
- */
-async function extractTextFromPDF(fileUrl: string): Promise<string> {
-  console.log('Fetching PDF from URL:', fileUrl);
-
-  // Fetch the PDF file
-  const response = await fetch(fileUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-
-  console.log('PDF size:', uint8Array.length, 'bytes');
-
-  // Load the PDF document
-  const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
-  const pdf = await loadingTask.promise;
-
-  console.log('PDF loaded, pages:', pdf.numPages);
-
-  // Extract text from all pages
-  let fullText = '';
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item: any) => item.str)
-      .join(' ');
-    fullText += pageText + '\n\n';
-  }
-
-  console.log('Extracted text length:', fullText.length, 'characters');
-  return fullText.trim();
-}
-
-/**
- * Translate and summarize a document using GPT-4o
- * Uses PDF.js for PDF text extraction (serverless-compatible)
- * Uses Vision API for images
+ * Translate and summarize a document using GPT-4o Vision API
+ * Currently only supports images (png, jpeg, gif, webp)
+ * PDFs must be converted to images client-side before upload
  */
 export async function translateDocument(params: {
   fileUrl: string;
@@ -146,6 +107,7 @@ export async function translateDocument(params: {
   if (domain) {
     userPrompt += `\nDocument domain: ${domain}`;
   }
+  userPrompt += '\n\nPlease translate this document and provide a summary.';
 
   try {
     console.log('=== Translation Request Start ===');
@@ -156,75 +118,43 @@ export async function translateDocument(params: {
     console.log('OpenAI API Key exists:', !!process.env.OPENAI_API_KEY);
     console.log('OpenAI API Key prefix:', process.env.OPENAI_API_KEY?.substring(0, 10));
 
-    let response: OpenAI.Chat.Completions.ChatCompletion;
-
-    // Handle PDFs differently from images
+    // Check if PDF - reject for now since Vision API doesn't support PDFs
     if (mimeType === 'application/pdf') {
-      console.log('Processing PDF with text extraction...');
-
-      // Extract text from PDF
-      const documentText = await extractTextFromPDF(fileUrl);
-
-      if (!documentText || documentText.length < 10) {
-        throw new Error('Failed to extract text from PDF or PDF is empty');
-      }
-
-      userPrompt += '\n\nDocument text:\n' + documentText;
-
-      // Use text completion for PDFs
-      response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'BridgeTranslation',
-            schema: translationSchema,
-            strict: true,
-          },
-        },
-        temperature: 0.3,
-        max_tokens: 4000,
-      });
-    } else {
-      // Use Vision API for images (png, jpeg, gif, webp)
-      console.log('Processing image with Vision API...');
-
-      userPrompt += '\n\nPlease translate this document image and provide a summary.';
-
-      response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: userPrompt },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: fileUrl,
-                  detail: 'high',
-                },
-              },
-            ],
-          },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'BridgeTranslation',
-            schema: translationSchema,
-            strict: true,
-          },
-        },
-        temperature: 0.3,
-        max_tokens: 4000,
-      });
+      throw new Error('PDF files are not yet supported. Please upload the document as an image (PNG, JPEG, or WebP) instead.');
     }
+
+    // Use Vision API for images (png, jpeg, gif, webp)
+    console.log('Processing image with Vision API...');
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userPrompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: fileUrl,
+                detail: 'high',
+              },
+            },
+          ],
+        },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'BridgeTranslation',
+          schema: translationSchema,
+          strict: true,
+        },
+      },
+      temperature: 0.3,
+      max_tokens: 4000,
+    });
 
     const content = response.choices[0]?.message?.content;
 
