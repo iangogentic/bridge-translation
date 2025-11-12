@@ -36,6 +36,16 @@ export const auth = betterAuth({
     // Allow all Vercel preview and production URLs
     "https://*.vercel.app",
   ].filter(Boolean) as string[],
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 5, // 5 minutes cache
+    },
+  },
+  advanced: {
+    cookiePrefix: "bridge_auth",
+    useSecureCookies: process.env.NODE_ENV === "production",
+  },
 });
 
 export type Session = typeof auth.$Infer.Session;

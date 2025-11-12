@@ -27,7 +27,7 @@ function getDatabase() {
   if (!dbInstance) {
     const client = postgres(process.env.DATABASE_URL, {
       prepare: false,
-      max: process.env.NODE_ENV === 'production' ? 1 : 10,
+      max: process.env.NODE_ENV === 'production' ? 3 : 10,
     });
     dbInstance = drizzle(client, { schema });
   }
