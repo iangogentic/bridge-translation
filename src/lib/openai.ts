@@ -122,17 +122,28 @@ export async function translateDocument(params: {
 
     if (isPDF) {
       // Extract text from PDF
-      console.log('Downloading and parsing PDF...');
+      console.log('Downloading PDF from Blob...');
       const response = await fetch(fileUrl);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download PDF: ${response.statusText}`);
+      }
+
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      console.log('Calling pdf-parse...');
-      console.log('Buffer size:', buffer.length);
+      console.log('✅ PDF downloaded, size:', buffer.length, 'bytes');
+      console.log('Calling pdf-parse library...');
 
-      const data = await (pdfParse as any)(buffer);
-      console.log('PDF parsing complete');
-      console.log('PDF data:', { numpages: data.numpages, textLength: data.text?.length });
+      let data;
+      try {
+        data = await (pdfParse as any)(buffer);
+        console.log('✅ PDF parsed successfully');
+        console.log('PDF metadata:', { pages: data.numpages, info: data.info });
+      } catch (pdfError) {
+        console.error('pdf-parse error:', pdfError);
+        throw new Error('Failed to parse PDF: ' + (pdfError instanceof Error ? pdfError.message : 'Unknown PDF parsing error'));
+      }
 
       const pdfText = data.text;
 
@@ -167,12 +178,22 @@ export async function translateDocument(params: {
       const content = completion.choices[0]?.message?.content;
 
       if (!content) {
+        console.error('OpenAI response:', completion);
         throw new Error('No response from OpenAI');
       }
 
-      console.log('Translation completed successfully');
+      console.log('✅ Translation completed successfully');
+      console.log('Response content length:', content.length);
+      console.log('Response preview:', content.substring(0, 200));
 
-      const result: TranslationResult = JSON.parse(content);
+      let result: TranslationResult;
+      try {
+        result = JSON.parse(content);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.error('Raw content:', content);
+        throw new Error('Failed to parse OpenAI response: ' + (parseError instanceof Error ? parseError.message : 'Invalid JSON'));
+      }
 
       // Validate the result has required fields
       if (!result.translation_html || !result.summary || !result.detected_language) {
@@ -218,12 +239,22 @@ export async function translateDocument(params: {
       const content = response.choices[0]?.message?.content;
 
       if (!content) {
+        console.error('OpenAI response:', response);
         throw new Error('No response from OpenAI');
       }
 
-      console.log('Translation completed successfully');
+      console.log('✅ Translation completed successfully');
+      console.log('Response content length:', content.length);
+      console.log('Response preview:', content.substring(0, 200));
 
-      const result: TranslationResult = JSON.parse(content);
+      let result: TranslationResult;
+      try {
+        result = JSON.parse(content);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.error('Raw content:', content);
+        throw new Error('Failed to parse OpenAI response: ' + (parseError instanceof Error ? parseError.message : 'Invalid JSON'));
+      }
 
       // Validate the result has required fields
       if (!result.translation_html || !result.summary || !result.detected_language) {
