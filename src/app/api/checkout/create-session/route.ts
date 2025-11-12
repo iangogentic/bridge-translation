@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
     headers['Access-Control-Allow-Headers'] = 'Content-Type';
   }
 
+  let finalPriceId: string | undefined;
+
   try {
     const body = await req.json();
     const { email, priceId, returnUrl } = body;
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine which price to use
-    let finalPriceId = priceId;
+    finalPriceId = priceId;
     if (!finalPriceId) {
       // Default to starter plan if no priceId provided
       finalPriceId = STRIPE_PLANS.starter;
