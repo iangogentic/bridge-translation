@@ -26,12 +26,12 @@
     "nanoid": "^5.1.6",
     "next": "16.0.1",
     "openai": "^6.8.1",
-    "pdfjs-dist": "3.11.174",
     "postgres": "^3.4.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "resend": "^6.4.2",
-    "stripe": "^19.3.0"
+    "stripe": "^19.3.0",
+    "unpdf": "^1.4.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

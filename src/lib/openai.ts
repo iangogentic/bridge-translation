@@ -1,17 +1,11 @@
 /**
  * OpenAI GPT-4o integration for document translation and summarization
- * Uses pdfjs-dist for PDF text extraction (pure JavaScript, serverless-compatible)
+ * Uses unpdf for PDF text extraction (serverless-compatible, no native dependencies)
  * Uses Vision API for images
  */
 
 import OpenAI from 'openai';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure pdfjs worker for serverless environment
-if (typeof window === 'undefined') {
-  // Server-side: disable worker (not needed for text extraction)
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-}
+import { extractText } from 'unpdf';
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn('OPENAI_API_KEY is not set - OpenAI features will not work');
@@ -97,7 +91,7 @@ Guidelines:
 Output format: Return ONLY valid JSON matching the schema.`;
 
 /**
- * Extract text from PDF using pdfjs-dist (pure JavaScript, serverless-compatible)
+ * Extract text from PDF using unpdf (serverless-compatible, no native dependencies)
  */
 async function extractPDFText(fileUrl: string): Promise<string> {
   console.log('📄 Fetching PDF:', fileUrl);
@@ -109,52 +103,23 @@ async function extractPDFText(fileUrl: string): Promise<string> {
   }
 
   const arrayBuffer = await response.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-  console.log('📥 PDF downloaded:', uint8Array.length, 'bytes');
+  console.log('📥 PDF downloaded:', arrayBuffer.byteLength, 'bytes');
 
-  // Load PDF with pdfjs
-  const loadingTask = pdfjsLib.getDocument({
-    data: uint8Array,
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    useSystemFonts: true,
-  });
+  // Extract text with unpdf
+  const { text, totalPages } = await extractText(arrayBuffer, { mergePages: true });
+  console.log('📖 PDF processed, pages:', totalPages);
+  console.log('✅ Text extracted:', text.length, 'characters');
 
-  const pdfDocument = await loadingTask.promise;
-  console.log('📖 PDF loaded, pages:', pdfDocument.numPages);
-
-  // Extract text from all pages
-  let fullText = '';
-  for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-    const page = await pdfDocument.getPage(pageNum);
-    const textContent = await page.getTextContent();
-
-    // Combine text items with spaces
-    const pageText = textContent.items
-      .map((item: any) => {
-        if ('str' in item) {
-          return item.str;
-        }
-        return '';
-      })
-      .join(' ');
-
-    fullText += pageText + '\n\n';
-  }
-
-  const trimmedText = fullText.trim();
-  console.log('✅ Text extracted:', trimmedText.length, 'characters');
-
-  if (trimmedText.length === 0) {
+  if (!text || text.trim().length === 0) {
     throw new Error('Could not extract text from PDF - document may be image-based or scanned');
   }
 
-  return trimmedText;
+  return text.trim();
 }
 
 /**
  * Translate and summarize a document using GPT-4o
- * Uses pdfjs-dist for PDF text extraction (serverless-compatible)
+ * Uses unpdf for PDF text extraction (serverless-compatible)
  * Uses Vision API for images
  */
 export async function translateDocument(params: {
