@@ -76,11 +76,11 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
+     * - _next/* (all Next.js internal files)
+     * - static files (images, icons, fonts, etc.)
+     * - favicon
+     * This ensures middleware only runs on actual page routes
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|eot)$).*)',
   ],
 };
