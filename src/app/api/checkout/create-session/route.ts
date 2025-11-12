@@ -15,8 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, STRIPE_PLANS } from '@/lib/stripe';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-const MARKETING_URL = process.env.MARKETING_SITE_URL || 'https://bridge.com';
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim();
+const MARKETING_URL = (process.env.MARKETING_SITE_URL || 'https://bridge.com').trim();
 
 export async function POST(req: NextRequest) {
   // Handle CORS
