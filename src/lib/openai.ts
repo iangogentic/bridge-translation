@@ -119,11 +119,47 @@ export async function translateDocument(params: {
     if (isPDF) {
       // Extract text from PDF
       console.log('Downloading and parsing PDF...');
-      const response = await fetch(fileUrl);
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
 
-      const data = await (pdfParse as any)(buffer);
+      let response;
+      try {
+        response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+        }
+      } catch (fetchError) {
+        console.error('PDF fetch error:', fetchError);
+        throw new Error('Failed to download PDF file: ' + (fetchError instanceof Error ? fetchError.message : 'Unknown error'));
+      }
+
+      let arrayBuffer;
+      try {
+        arrayBuffer = await response.arrayBuffer();
+        console.log('PDF downloaded, size:', arrayBuffer.byteLength, 'bytes');
+      } catch (bufferError) {
+        console.error('ArrayBuffer error:', bufferError);
+        throw new Error('Failed to read PDF data: ' + (bufferError instanceof Error ? bufferError.message : 'Unknown error'));
+      }
+
+      let buffer;
+      try {
+        buffer = Buffer.from(arrayBuffer);
+        console.log('Buffer created successfully');
+      } catch (bufferConvertError) {
+        console.error('Buffer conversion error:', bufferConvertError);
+        throw new Error('Failed to convert PDF to buffer: ' + (bufferConvertError instanceof Error ? bufferConvertError.message : 'Unknown error'));
+      }
+
+      let data;
+      try {
+        console.log('Starting pdf-parse...');
+        data = await (pdfParse as any)(buffer);
+        console.log('pdf-parse completed, pages:', data?.numpages);
+      } catch (parseError) {
+        console.error('PDF parse error:', parseError);
+        console.error('Parse error stack:', parseError instanceof Error ? parseError.stack : 'No stack');
+        throw new Error('Failed to parse PDF (pdf-parse failed): ' + (parseError instanceof Error ? parseError.message : 'Unknown error'));
+      }
+
       const pdfText = data.text;
 
       if (!pdfText || pdfText.trim().length === 0) {
