@@ -10,6 +10,12 @@ import Stripe from 'stripe';
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
 
+  console.log('Stripe initialization:', {
+    keyExists: !!key,
+    keyPrefix: key?.substring(0, 7),
+    keyLength: key?.length,
+  });
+
   if (!key) {
     throw new Error('STRIPE_SECRET_KEY is not defined in environment variables');
   }
