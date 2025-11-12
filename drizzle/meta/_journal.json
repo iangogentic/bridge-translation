@@ -15,6 +15,13 @@
       "when": 1762902778802,
       "tag": "0001_curious_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762973899264,
+      "tag": "0002_nasty_blue_marvel",
+      "breakpoints": true
     }
   ]
 }

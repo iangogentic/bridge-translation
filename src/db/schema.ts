@@ -98,7 +98,7 @@ export const users = pgTable('users', {
 export const families = pgTable('families', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }),
-  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ownerId: text('owner_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -107,7 +107,7 @@ export const families = pgTable('families', {
 export const familyMembers = pgTable('family_members', {
   id: uuid('id').primaryKey().defaultRandom(),
   familyId: uuid('family_id').notNull().references(() => families.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   role: varchar('role', { length: 50 }).notNull().default('helper'), // 'owner' | 'helper'
   invitedAt: timestamp('invited_at').defaultNow().notNull(),
   acceptedAt: timestamp('accepted_at'),
@@ -119,7 +119,7 @@ export const familyMembers = pgTable('family_members', {
 // Documents table
 export const documents = pgTable('documents', {
   id: uuid('id').primaryKey().defaultRandom(),
-  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ownerId: text('owner_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   familyId: uuid('family_id').references(() => families.id, { onDelete: 'set null' }),
   blobUrl: text('blob_url').notNull(),
   filename: varchar('filename', { length: 255 }).notNull(),
@@ -153,7 +153,7 @@ export const results = pgTable('results', {
 export const shares = pgTable('shares', {
   id: uuid('id').primaryKey().defaultRandom(),
   documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  createdBy: uuid('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdBy: text('created_by').notNull().references(() => user.id, { onDelete: 'cascade' }),
   token: varchar('token', { length: 64 }).notNull().unique(),
   expiresAt: timestamp('expires_at').notNull(),
   canDownload: boolean('can_download').default(true).notNull(),
