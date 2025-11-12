@@ -1,14 +1,17 @@
 /**
- * Email sending API route using Resend MCP
- * This route is called by Better Auth to send magic link emails
+ * Email sending API route using Resend
+ * This route is called by the Stripe webhook to send welcome emails
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 interface EmailRequest {
   to: string;
   subject: string;
-  text: string;
+  text?: string;
   html: string;
   from?: string;
 }
@@ -19,56 +22,56 @@ export async function POST(request: NextRequest) {
     const { to, subject, text, html, from } = body;
 
     // Validate required fields
-    if (!to || !subject || (!text && !html)) {
+    if (!to || !subject || !html) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: to, subject, and html are required' },
         { status: 400 }
       );
     }
 
-    // In development, just log the email
-    if (process.env.NODE_ENV === 'development') {
-      console.log('=== EMAIL (Development Mode) ===');
-      console.log('To:', to);
-      console.log('Subject:', subject);
-      console.log('Text:', text);
-      console.log('================================');
-
-      return NextResponse.json({ success: true, messageId: 'dev-' + Date.now() });
+    // Check if Resend API key is configured
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY is not configured');
+      return NextResponse.json(
+        { error: 'Email service is not configured' },
+        { status: 500 }
+      );
     }
 
-    // Production: Call Resend MCP via code-executor
-    // This is a placeholder - the actual implementation would use code-executor
-    // to call: await callMCPTool('mcp__resend__send_email', {...})
-
-    // For now, we'll use a direct approach
-    // In production, this would be replaced with actual Resend MCP call
-    const resendPayload = {
-      from: from || 'Bridge <noreply@bridge.app>',
+    console.log('Sending email via Resend:', {
       to,
       subject,
-      text,
-      html,
-    };
-
-    console.log('Sending email via Resend MCP:', {
-      to,
-      subject,
-      from: resendPayload.from,
+      from: from || 'Bridge <onboarding@resend.dev>',
     });
 
-    // Placeholder response - in production this would be the actual Resend response
-    const messageId = `msg_${Date.now()}`;
+    // Send email via Resend
+    const { data, error } = await resend.emails.send({
+      from: from || 'Bridge <onboarding@resend.dev>',
+      to: [to],
+      subject,
+      html,
+      text: text || undefined,
+    });
+
+    if (error) {
+      console.error('Resend error:', error);
+      return NextResponse.json(
+        { error: 'Failed to send email', details: error },
+        { status: 500 }
+      );
+    }
+
+    console.log('✅ Email sent successfully:', data?.id);
 
     return NextResponse.json({
       success: true,
-      messageId,
+      messageId: data?.id,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending email:', error);
     return NextResponse.json(
-      { error: 'Failed to send email' },
+      { error: 'Failed to send email', details: error.message },
       { status: 500 }
     );
   }
