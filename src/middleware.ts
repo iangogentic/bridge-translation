@@ -17,11 +17,16 @@ export async function middleware(request: NextRequest) {
     headers: request.headers,
   });
 
-  // If no session, redirect to login (except for auth pages)
+  // If no session, redirect to login (except for public pages and APIs)
   if (!session?.user) {
-    // Allow access to public pages
+    // Allow access to public pages and APIs
     const publicPages = ['/login', '/pricing', '/signup', '/'];
-    if (publicPages.some(page => pathname === page || pathname.startsWith('/api/auth'))) {
+    const publicAPIs = ['/api/auth', '/api/checkout', '/api/webhooks', '/api/send-email'];
+
+    if (
+      publicPages.some(page => pathname === page) ||
+      publicAPIs.some(api => pathname.startsWith(api))
+    ) {
       return NextResponse.next();
     }
 
