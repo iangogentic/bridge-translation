@@ -7,12 +7,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { documents, results } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Get user ID from session
-    // For now, use dev user ID
-    const userId = '00000000-0000-0000-0000-000000000001';
+    // Get user ID from Better Auth session
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized', message: 'You must be logged in to view documents' },
+        { status: 401 }
+      );
+    }
+
+    const userId = session.user.id;
 
     // Fetch all documents for user with their results
     const userDocuments = await db
