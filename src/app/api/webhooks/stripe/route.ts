@@ -124,8 +124,8 @@ async function handleCheckoutCompleted(session: any) {
         stripeSubscriptionId: subscriptionId,
         subscriptionStatus: subscription.status,
         subscriptionPlan: planName,
-        subscriptionStartDate: new Date(subscription.current_period_start * 1000),
-        subscriptionEndDate: new Date(subscription.current_period_end * 1000),
+        subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
+        subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
         trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
         updatedAt: new Date(),
       })
@@ -146,8 +146,8 @@ async function handleCheckoutCompleted(session: any) {
       stripeSubscriptionId: subscriptionId,
       subscriptionStatus: subscription.status,
       subscriptionPlan: planName,
-      subscriptionStartDate: new Date(subscription.current_period_start * 1000),
-      subscriptionEndDate: new Date(subscription.current_period_end * 1000),
+      subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
+      subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
       trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -298,8 +298,8 @@ async function handleSubscriptionUpdated(subscriptionData: any) {
     .set({
       subscriptionStatus: subscription.status,
       subscriptionPlan: planName,
-      subscriptionStartDate: new Date(subscription.current_period_start * 1000),
-      subscriptionEndDate: new Date(subscription.current_period_end * 1000),
+      subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
+      subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
       trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
       updatedAt: new Date(),
     })
