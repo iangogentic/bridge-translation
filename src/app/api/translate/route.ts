@@ -44,17 +44,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Create document record
-    const [document] = await db
-      .insert(documents)
-      .values({
-        ownerId: userId,
-        blobUrl: fileUrl,
-        filename,
-        mimeType,
-        fileSize,
-        pageCount: null, // Could be extracted from PDF metadata
-      })
-      .returning();
+    let document;
+    try {
+      [document] = await db
+        .insert(documents)
+        .values({
+          ownerId: userId,
+          blobUrl: fileUrl,
+          filename,
+          mimeType,
+          fileSize,
+          pageCount: null, // Could be extracted from PDF metadata
+        })
+        .returning();
+
+      console.log('✅ Document record created:', document.id);
+    } catch (dbError) {
+      console.error('Database insert error:', dbError);
+      throw new Error('Failed to create document record: ' + (dbError instanceof Error ? dbError.message : 'Unknown database error'));
+    }
 
     // Development mode: Return mock translation if no OpenAI key
     if (process.env.NODE_ENV === 'development' && !process.env.OPENAI_API_KEY) {
