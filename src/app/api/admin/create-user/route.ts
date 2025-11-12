@@ -74,7 +74,6 @@ export async function POST(req: NextRequest) {
         email,
         name,
         password,
-        emailVerified: true, // Admin-created users are pre-verified
       },
     });
 
