@@ -15,7 +15,6 @@ function getStripe(): Stripe {
   }
 
   return new Stripe(key, {
-    apiVersion: '2024-11-20.acacia',
     typescript: true,
     maxNetworkRetries: 2,
   });
