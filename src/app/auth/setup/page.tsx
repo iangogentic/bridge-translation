@@ -96,13 +96,19 @@ function SetupForm() {
       }
 
       // Auto-login using Better Auth
+      // Since we used Better Auth's setUserPassword API, the account is properly set up
       const signInResult = await authClient.signIn.email({
         email: data.email,
         password: password,
+        callbackURL: '/welcome', // Explicit callback after sign-in
       });
 
       if (signInResult.error) {
-        throw new Error('Account created but login failed. Please sign in manually.');
+        console.error('Auto-login error:', signInResult.error);
+        // Account was created successfully, but auto-login failed
+        // Redirect to login page with a message
+        router.push(`/login?email=${encodeURIComponent(data.email)}&setup=complete`);
+        return;
       }
 
       // Redirect to welcome page

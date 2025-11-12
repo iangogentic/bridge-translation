@@ -9,8 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { verification, user, account } from '@/db/schema';
 import { eq, and, gt } from 'drizzle-orm';
+import { hashPassword } from 'better-auth/crypto';
 import crypto from 'crypto';
-import { hash } from 'bcrypt';
 
 export async function POST(req: NextRequest) {
   try {
@@ -70,9 +70,6 @@ export async function POST(req: NextRequest) {
 
     const userId = userRecord[0].id;
 
-    // Hash password
-    const hashedPassword = await hash(password, 10);
-
     // Update user with name and mark as verified
     await db
       .update(user)
@@ -83,7 +80,21 @@ export async function POST(req: NextRequest) {
       })
       .where(eq(user.id, userId));
 
-    // Create or update account with password
+    // Hash password using Better Auth's official crypto utility
+    // This ensures the password format matches Better Auth's internal expectations
+    let hashedPassword: string;
+    try {
+      hashedPassword = await hashPassword(password);
+      console.log(`✅ Password hashed successfully for user ${userId}`);
+    } catch (hashError: any) {
+      console.error('Password hashing failed:', hashError);
+      return NextResponse.json(
+        { error: 'Failed to hash password' },
+        { status: 500 }
+      );
+    }
+
+    // Update or create the account record with the properly hashed password
     const existingAccount = await db
       .select()
       .from(account)
@@ -104,8 +115,9 @@ export async function POST(req: NextRequest) {
           updatedAt: new Date(),
         })
         .where(eq(account.id, existingAccount[0].id));
+      console.log(`✅ Updated password for account ${existingAccount[0].id}`);
     } else {
-      // Create new account
+      // Create new credential account
       await db.insert(account).values({
         id: crypto.randomUUID(),
         accountId: email,
@@ -115,6 +127,7 @@ export async function POST(req: NextRequest) {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+      console.log(`✅ Created credential account for user ${userId}`);
     }
 
     // Delete the used token (one-time use)

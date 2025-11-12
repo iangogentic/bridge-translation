@@ -1,16 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "@/lib/auth-client";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Check if redirected from setup completion
+    if (searchParams.get('setup') === 'complete') {
+      setSuccessMessage('Account created successfully! Please sign in below.');
+      const emailParam = searchParams.get('email');
+      if (emailParam) {
+        setEmail(emailParam);
+      }
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +68,11 @@ export default function LoginPage() {
         {/* Login form card */}
         <div className="bg-white/70 backdrop-blur-2xl rounded-2xl shadow-2xl p-6 border border-white/40">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {successMessage && (
+              <div className="p-3 bg-green-100 border border-green-300 text-green-700 rounded-xl text-sm">
+                {successMessage}
+              </div>
+            )}
             {error && (
               <div className="p-3 bg-red-100 border border-red-300 text-red-700 rounded-xl text-sm">
                 {error}
@@ -149,5 +167,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

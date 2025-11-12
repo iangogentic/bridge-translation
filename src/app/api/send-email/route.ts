@@ -6,7 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Make Resend optional during build (use empty string if not set)
+const resend = new Resend(process.env.RESEND_API_KEY || 'dummy-key-for-build');
 
 interface EmailRequest {
   to: string;

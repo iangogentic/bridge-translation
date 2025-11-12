@@ -17,6 +17,7 @@ import { db } from '@/db';
 import { user, verification } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
+import { auth } from '@/lib/auth';
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim() || '';
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim();
@@ -133,28 +134,53 @@ async function handleCheckoutCompleted(session: any) {
 
     console.log(`Updated existing user ${userId} with Stripe subscription`);
   } else {
-    // Create new user account
-    const newUserId = crypto.randomUUID();
+    // Create new user account using Better Auth (without password yet)
     const userName = email.split('@')[0]; // Use email prefix as default name
 
-    await db.insert(user).values({
-      id: newUserId,
-      name: userName,
-      email: email,
-      emailVerified: false,
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscriptionId,
-      subscriptionStatus: subscription.status,
-      subscriptionPlan: planName,
-      subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
-      subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
-      trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    // Generate a temporary secure random password that will be replaced during setup
+    const tempPassword = crypto.randomBytes(32).toString('hex');
 
-    userId = newUserId;
-    console.log(`Created new user ${userId} for ${email}`);
+    // Use Better Auth's admin createUser API
+    try {
+      const result = await auth.api.createUser({
+        body: {
+          email: email,
+          name: userName,
+          password: tempPassword, // Temporary password - user will set their own in setup
+          data: {
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
+            subscriptionStatus: subscription.status,
+            subscriptionPlan: planName,
+            subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : new Date().toISOString(),
+            subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : new Date().toISOString(),
+            trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+          },
+        },
+      });
+
+      userId = result.user.id;
+
+      // Update user record with Stripe info (Better Auth's createUser doesn't support these fields directly)
+      await db
+        .update(user)
+        .set({
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscriptionId,
+          subscriptionStatus: subscription.status,
+          subscriptionPlan: planName,
+          subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
+          subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
+          trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(user.id, userId));
+
+      console.log(`Created new user ${userId} for ${email} via Better Auth`);
+    } catch (createError: any) {
+      console.error('Better Auth createUser failed:', createError);
+      throw new Error(`Failed to create user: ${createError.message}`);
+    }
   }
 
   // Generate magic link token for account setup
