@@ -8,12 +8,14 @@
 import Stripe from 'stripe';
 
 function getStripe(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const rawKey = process.env.STRIPE_SECRET_KEY;
+  const key = rawKey?.trim(); // Remove any whitespace/newlines
 
   console.log('Stripe initialization:', {
     keyExists: !!key,
     keyPrefix: key?.substring(0, 7),
     keyLength: key?.length,
+    rawKeyLength: rawKey?.length,
   });
 
   if (!key) {
