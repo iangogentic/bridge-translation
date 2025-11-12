@@ -7,7 +7,6 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -23,15 +22,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get session only for protected routes
+  // Only import auth when needed (lazy loading to avoid timeouts on public pages)
+  const { auth } = await import('@/lib/auth');
+
+  // Get session only for protected routes with timeout
   let session;
   try {
-    session = await auth.api.getSession({
+    // Add timeout to prevent middleware hanging
+    const sessionPromise = auth.api.getSession({
       headers: request.headers,
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Session check timeout')), 3000)
+    );
+
+    session = await Promise.race([sessionPromise, timeoutPromise]) as any;
   } catch (error) {
     console.error('[Middleware] Session check failed:', error);
-    // If session check fails, redirect to login
+    // If session check fails or times out, redirect to login
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
