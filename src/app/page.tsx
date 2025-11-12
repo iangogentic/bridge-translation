@@ -87,7 +87,9 @@ export default function Home() {
       });
 
       if (!translateRes.ok) {
-        throw new Error('Translation failed');
+        const errorData = await translateRes.json();
+        console.error('Translation API error:', errorData);
+        throw new Error(errorData.message || errorData.error || 'Translation failed');
       }
 
       const translateData = await translateRes.json();
