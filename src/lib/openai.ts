@@ -1,10 +1,9 @@
 /**
  * OpenAI GPT-4o integration for document translation and summarization
- * Extracts text from PDFs and uses Chat Completions API
+ * Uses Vision API for both PDFs and images
  */
 
 import OpenAI from 'openai';
-import * as pdfParse from 'pdf-parse';
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn('OPENAI_API_KEY is not set - OpenAI features will not work');
@@ -118,151 +117,66 @@ export async function translateDocument(params: {
     console.log('OpenAI API Key exists:', !!process.env.OPENAI_API_KEY);
     console.log('OpenAI API Key prefix:', process.env.OPENAI_API_KEY?.substring(0, 10));
 
-    const isPDF = mimeType === 'application/pdf';
+    // Use Vision API for all document types (PDFs and images)
+    // GPT-4o Vision can read both image files and PDF files directly
+    console.log('Using Vision API for document...');
 
-    if (isPDF) {
-      // Extract text from PDF
-      console.log('Downloading PDF from Blob...');
-      const response = await fetch(fileUrl);
-
-      if (!response.ok) {
-        throw new Error(`Failed to download PDF: ${response.statusText}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      console.log('✅ PDF downloaded, size:', buffer.length, 'bytes');
-      console.log('Calling pdf-parse library...');
-
-      let data;
-      try {
-        data = await (pdfParse as any)(buffer);
-        console.log('✅ PDF parsed successfully');
-        console.log('PDF metadata:', { pages: data.numpages, info: data.info });
-      } catch (pdfError) {
-        console.error('pdf-parse error:', pdfError);
-        throw new Error('Failed to parse PDF: ' + (pdfError instanceof Error ? pdfError.message : 'Unknown PDF parsing error'));
-      }
-
-      const pdfText = data.text;
-
-      if (!pdfText || pdfText.trim().length === 0) {
-        throw new Error('Could not extract text from PDF - document may be image-based');
-      }
-
-      console.log(`✅ Extracted ${pdfText.length} characters from PDF (${data.numpages} pages)`);
-
-      // Send extracted text to GPT-4o
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `${userPrompt}\n\nDocument content:\n\n${pdfText}`,
-          },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'BridgeTranslation',
-            schema: translationSchema,
-            strict: true,
-          },
-        },
-        temperature: 0.3,
-        max_tokens: 4000,
-      });
-
-      const content = completion.choices[0]?.message?.content;
-
-      if (!content) {
-        console.error('OpenAI response:', completion);
-        throw new Error('No response from OpenAI');
-      }
-
-      console.log('✅ Translation completed successfully');
-      console.log('Response content length:', content.length);
-      console.log('Response preview:', content.substring(0, 200));
-
-      let result: TranslationResult;
-      try {
-        result = JSON.parse(content);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        console.error('Raw content:', content);
-        throw new Error('Failed to parse OpenAI response: ' + (parseError instanceof Error ? parseError.message : 'Invalid JSON'));
-      }
-
-      // Validate the result has required fields
-      if (!result.translation_html || !result.summary || !result.detected_language) {
-        throw new Error('Invalid response structure from OpenAI');
-      }
-
-      return result;
-
-    } else {
-      // For images, use Vision API directly
-      console.log('Using Vision API for image...');
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: userPrompt },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: fileUrl,
-                  detail: 'high',
-                },
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: userPrompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: fileUrl,
+                detail: 'high',
               },
-            ],
-          },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'BridgeTranslation',
-            schema: translationSchema,
-            strict: true,
-          },
+            },
+          ],
         },
-        temperature: 0.3,
-        max_tokens: 4000,
-      });
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'BridgeTranslation',
+          schema: translationSchema,
+          strict: true,
+        },
+      },
+      temperature: 0.3,
+      max_tokens: 4000,
+    });
 
-      const content = response.choices[0]?.message?.content;
+    const content = response.choices[0]?.message?.content;
 
-      if (!content) {
-        console.error('OpenAI response:', response);
-        throw new Error('No response from OpenAI');
-      }
-
-      console.log('✅ Translation completed successfully');
-      console.log('Response content length:', content.length);
-      console.log('Response preview:', content.substring(0, 200));
-
-      let result: TranslationResult;
-      try {
-        result = JSON.parse(content);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        console.error('Raw content:', content);
-        throw new Error('Failed to parse OpenAI response: ' + (parseError instanceof Error ? parseError.message : 'Invalid JSON'));
-      }
-
-      // Validate the result has required fields
-      if (!result.translation_html || !result.summary || !result.detected_language) {
-        throw new Error('Invalid response structure from OpenAI');
-      }
-
-      return result;
+    if (!content) {
+      console.error('OpenAI response:', response);
+      throw new Error('No response from OpenAI');
     }
+
+    console.log('✅ Translation completed successfully');
+    console.log('Response content length:', content.length);
+    console.log('Response preview:', content.substring(0, 200));
+
+    let result: TranslationResult;
+    try {
+      result = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.error('Raw content:', content);
+      throw new Error('Failed to parse OpenAI response: ' + (parseError instanceof Error ? parseError.message : 'Invalid JSON'));
+    }
+
+    // Validate the result has required fields
+    if (!result.translation_html || !result.summary || !result.detected_language) {
+      throw new Error('Invalid response structure from OpenAI');
+    }
+
+    return result;
 
   } catch (error) {
     console.error('OpenAI translation error:', error);
