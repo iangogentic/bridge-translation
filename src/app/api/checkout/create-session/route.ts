@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
   // Handle CORS
   const origin = req.headers.get('origin');
   const allowedOrigins = [
-    'https://bridge-website-theta.vercel.app',
     'https://bridgemarketingsite.vercel.app',
     'http://localhost:3001', // For local development
   ];
