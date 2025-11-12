@@ -18,8 +18,8 @@ import { user, verification } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET!;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim() || '';
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim();
 
 if (!WEBHOOK_SECRET) {
   console.warn('⚠️  STRIPE_WEBHOOK_SECRET is not set. Webhook signature verification will fail.');
