@@ -12,25 +12,31 @@ import { auth } from '@/lib/auth';
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Get session
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+  // Allow access to public pages and APIs WITHOUT session check (performance)
+  const publicPages = ['/login', '/pricing', '/signup', '/'];
+  const publicAPIs = ['/api/auth', '/api/checkout', '/api/webhooks', '/api/send-email'];
 
-  // If no session, redirect to login (except for public pages and APIs)
+  if (
+    publicPages.some(page => pathname === page) ||
+    publicAPIs.some(api => pathname.startsWith(api))
+  ) {
+    return NextResponse.next();
+  }
+
+  // Get session only for protected routes
+  let session;
+  try {
+    session = await auth.api.getSession({
+      headers: request.headers,
+    });
+  } catch (error) {
+    console.error('[Middleware] Session check failed:', error);
+    // If session check fails, redirect to login
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // If no session, redirect to login
   if (!session?.user) {
-    // Allow access to public pages and APIs
-    const publicPages = ['/login', '/pricing', '/signup', '/'];
-    const publicAPIs = ['/api/auth', '/api/checkout', '/api/webhooks', '/api/send-email'];
-
-    if (
-      publicPages.some(page => pathname === page) ||
-      publicAPIs.some(api => pathname.startsWith(api))
-    ) {
-      return NextResponse.next();
-    }
-
-    // Redirect to login for protected pages
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
