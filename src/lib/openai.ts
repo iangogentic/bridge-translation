@@ -110,9 +110,13 @@ export async function translateDocument(params: {
   userPrompt += '\n\nPlease translate this document and provide a summary.';
 
   try {
-    console.log('Sending document to GPT-4o for translation...');
+    console.log('=== Translation Request Start ===');
     console.log('File URL:', fileUrl);
     console.log('MIME type:', mimeType);
+    console.log('Target language:', targetLanguage);
+    console.log('Domain:', domain);
+    console.log('OpenAI API Key exists:', !!process.env.OPENAI_API_KEY);
+    console.log('OpenAI API Key prefix:', process.env.OPENAI_API_KEY?.substring(0, 10));
 
     const isPDF = mimeType === 'application/pdf';
 
@@ -123,14 +127,20 @@ export async function translateDocument(params: {
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
+      console.log('Calling pdf-parse...');
+      console.log('Buffer size:', buffer.length);
+
       const data = await (pdfParse as any)(buffer);
+      console.log('PDF parsing complete');
+      console.log('PDF data:', { numpages: data.numpages, textLength: data.text?.length });
+
       const pdfText = data.text;
 
       if (!pdfText || pdfText.trim().length === 0) {
         throw new Error('Could not extract text from PDF - document may be image-based');
       }
 
-      console.log(`Extracted ${pdfText.length} characters from PDF (${data.numpages} pages)`);
+      console.log(`✅ Extracted ${pdfText.length} characters from PDF (${data.numpages} pages)`);
 
       // Send extracted text to GPT-4o
       const completion = await openai.chat.completions.create({

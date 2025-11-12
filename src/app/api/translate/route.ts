@@ -151,10 +151,17 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Translation error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+    });
+
     return NextResponse.json(
       {
         error: 'Translation failed',
         message: error instanceof Error ? error.message : 'Unknown error',
+        details: error instanceof Error ? error.stack : String(error),
       },
       { status: 500 }
     );
