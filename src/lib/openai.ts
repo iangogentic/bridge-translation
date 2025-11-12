@@ -1,9 +1,10 @@
 /**
  * OpenAI GPT-4o integration for document translation and summarization
- * Uses OpenAI Files API for PDFs (serverless-compatible)
+ * Extracts text from PDFs and uses Chat Completions API
  */
 
 import OpenAI from 'openai';
+import * as pdfParse from 'pdf-parse';
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn('OPENAI_API_KEY is not set - OpenAI features will not work');
@@ -116,37 +117,29 @@ export async function translateDocument(params: {
     const isPDF = mimeType === 'application/pdf';
 
     if (isPDF) {
-      // Download PDF and upload to OpenAI Files API
-      console.log('Downloading PDF from Vercel Blob...');
+      // Extract text from PDF
+      console.log('Downloading and parsing PDF...');
       const response = await fetch(fileUrl);
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      console.log('Uploading PDF to OpenAI Files API...');
-      const file = await openai.files.create({
-        file: new File([buffer], 'document.pdf', { type: 'application/pdf' }),
-        purpose: 'user_data',
-      });
+      const data = await (pdfParse as any)(buffer);
+      const pdfText = data.text;
 
-      console.log(`File uploaded with ID: ${file.id}`);
+      if (!pdfText || pdfText.trim().length === 0) {
+        throw new Error('Could not extract text from PDF - document may be image-based');
+      }
 
-      // Use file in chat completion
-      const response2 = await openai.chat.completions.create({
+      console.log(`Extracted ${pdfText.length} characters from PDF (${data.numpages} pages)`);
+
+      // Send extracted text to GPT-4o
+      const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
           { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
           {
             role: 'user',
-            content: [
-              {
-                type: 'file' as const,
-                file: { file_id: file.id },
-              },
-              {
-                type: 'text',
-                text: userPrompt,
-              },
-            ],
+            content: `${userPrompt}\n\nDocument content:\n\n${pdfText}`,
           },
         ],
         response_format: {
@@ -161,7 +154,7 @@ export async function translateDocument(params: {
         max_tokens: 4000,
       });
 
-      const content = response2.choices[0]?.message?.content;
+      const content = completion.choices[0]?.message?.content;
 
       if (!content) {
         throw new Error('No response from OpenAI');
