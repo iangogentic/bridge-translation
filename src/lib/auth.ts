@@ -33,6 +33,8 @@ export const auth = betterAuth({
     "http://localhost:3005",
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+    // Allow all Vercel preview and production URLs
+    "https://*.vercel.app",
   ].filter(Boolean) as string[],
 });
 
