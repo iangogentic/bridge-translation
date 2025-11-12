@@ -97,17 +97,24 @@ export async function POST(req: NextRequest) {
     }, { headers });
   } catch (error: any) {
     console.error('Checkout session creation failed:', error);
+    console.error('Error details:', {
+      type: error.type,
+      message: error.message,
+      stack: error.stack,
+      stripeKeyExists: !!process.env.STRIPE_SECRET_KEY,
+      priceId: finalPriceId,
+    });
 
     // Handle Stripe-specific errors
     if (error.type === 'StripeInvalidRequestError') {
       return NextResponse.json(
-        { error: 'Invalid payment configuration. Please contact support.' },
+        { error: 'Invalid payment configuration. Please contact support.', details: error.message },
         { status: 400, headers }
       );
     }
 
     return NextResponse.json(
-      { error: 'Failed to create checkout session' },
+      { error: 'Failed to create checkout session', details: error.message },
       { status: 500, headers }
     );
   }
