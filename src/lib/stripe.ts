@@ -7,32 +7,22 @@
 
 import Stripe from 'stripe';
 
-let _stripe: Stripe | null = null;
-
 function getStripe(): Stripe {
-  if (_stripe) {
-    return _stripe;
-  }
+  const key = process.env.STRIPE_SECRET_KEY;
 
-  if (!process.env.STRIPE_SECRET_KEY) {
+  if (!key) {
     throw new Error('STRIPE_SECRET_KEY is not defined in environment variables');
   }
 
-  _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  return new Stripe(key, {
     apiVersion: '2025-10-29.clover',
     typescript: true,
+    maxNetworkRetries: 2,
   });
-
-  return _stripe;
 }
 
-// Lazy initialization - only creates Stripe client when first accessed
-export const stripe = new Proxy({} as Stripe, {
-  get: (target, prop) => {
-    const client = getStripe();
-    return (client as any)[prop];
-  }
-});
+// Export getter function - creates new instance each time to ensure env vars are read
+export const stripe = getStripe();
 
 /**
  * Stripe Price IDs (configure these in your Stripe Dashboard)
