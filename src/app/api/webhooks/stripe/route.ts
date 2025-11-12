@@ -161,10 +161,11 @@ async function handleCheckoutCompleted(session: any) {
 
       userId = result.user.id;
 
-      // Update user record with Stripe info (Better Auth's createUser doesn't support these fields directly)
+      // Update user record with Stripe info and default role (Better Auth's createUser doesn't support these fields directly)
       await db
         .update(user)
         .set({
+          role: 'customer', // Paying customers get 'customer' role
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
           subscriptionStatus: subscription.status,

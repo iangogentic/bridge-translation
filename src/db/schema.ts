@@ -22,6 +22,9 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
 
+  // Role-based access control
+  role: text("role").default("customer").notNull(), // customer | admin | internal
+
   // Stripe Integration Fields
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),

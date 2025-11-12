@@ -1,0 +1,75 @@
+/**
+ * Middleware for subscription-based access control
+ *
+ * Checks if users have active subscriptions before allowing access to protected routes.
+ * Admins and internal users bypass subscription checks.
+ */
+
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { auth } from '@/lib/auth';
+
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // Get session
+  const session = await auth.api.getSession({
+    headers: request.headers,
+  });
+
+  // If no session, redirect to login (except for auth pages)
+  if (!session?.user) {
+    // Allow access to public pages
+    const publicPages = ['/login', '/pricing', '/signup', '/'];
+    if (publicPages.some(page => pathname === page || pathname.startsWith('/api/auth'))) {
+      return NextResponse.next();
+    }
+
+    // Redirect to login for protected pages
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  const user = session.user as any; // Type assertion for custom fields
+
+  // Check if user is admin or internal - they bypass subscription checks
+  if (user.role === 'admin' || user.role === 'internal') {
+    console.log(`[Middleware] Admin/Internal user ${user.email} - bypassing subscription check`);
+    return NextResponse.next();
+  }
+
+  // For regular users, check subscription status
+  const hasActiveSubscription =
+    user.subscriptionStatus === 'active' ||
+    user.subscriptionStatus === 'trialing';
+
+  // Check if trial is still valid
+  const trialValid = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
+
+  if (!hasActiveSubscription && !trialValid) {
+    // User doesn't have active subscription - redirect to pricing
+    console.log(`[Middleware] User ${user.email} - no active subscription, redirecting to pricing`);
+
+    // Don't redirect if already on pricing or checkout pages
+    if (pathname.startsWith('/pricing') || pathname.startsWith('/checkout')) {
+      return NextResponse.next();
+    }
+
+    return NextResponse.redirect(new URL('/pricing?reason=subscription_required', request.url));
+  }
+
+  // User has active subscription or valid trial
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};

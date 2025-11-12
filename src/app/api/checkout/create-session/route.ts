@@ -42,33 +42,30 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { email, priceId, returnUrl } = body;
 
-    // Validate input
-    if (!email || typeof email !== 'string') {
+    // Validate price ID
+    if (!priceId || typeof priceId !== 'string') {
       return NextResponse.json(
-        { error: 'Email is required' },
+        { error: 'Price ID is required' },
         { status: 400, headers }
       );
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'Invalid email format' },
-        { status: 400, headers }
-      );
+    // If email provided, validate format
+    if (email && typeof email === 'string') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return NextResponse.json(
+          { error: 'Invalid email format' },
+          { status: 400, headers }
+        );
+      }
     }
 
-    // Determine which price to use
     finalPriceId = priceId;
-    if (!finalPriceId) {
-      // Default to starter plan if no priceId provided
-      finalPriceId = STRIPE_PLANS.starter;
-    }
 
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
-      customer_email: email,
+      ...(email && { customer_email: email }), // Only set if email provided
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
