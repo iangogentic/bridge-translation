@@ -1,10 +1,17 @@
 /**
  * OpenAI GPT-4o integration for document translation and summarization
- * Extracts text from PDFs and uses Chat Completions API
+ * Uses pdfjs-dist for PDF text extraction (pure JavaScript, serverless-compatible)
+ * Uses Vision API for images
  */
 
 import OpenAI from 'openai';
-import * as pdfParse from 'pdf-parse';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure pdfjs worker for serverless environment
+if (typeof window === 'undefined') {
+  // Server-side: disable worker (not needed for text extraction)
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+}
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn('OPENAI_API_KEY is not set - OpenAI features will not work');
@@ -90,8 +97,64 @@ Guidelines:
 Output format: Return ONLY valid JSON matching the schema.`;
 
 /**
+ * Extract text from PDF using pdfjs-dist (pure JavaScript, serverless-compatible)
+ */
+async function extractPDFText(fileUrl: string): Promise<string> {
+  console.log('📄 Fetching PDF:', fileUrl);
+
+  // Fetch PDF
+  const response = await fetch(fileUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PDF: ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  console.log('📥 PDF downloaded:', uint8Array.length, 'bytes');
+
+  // Load PDF with pdfjs
+  const loadingTask = pdfjsLib.getDocument({
+    data: uint8Array,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+
+  const pdfDocument = await loadingTask.promise;
+  console.log('📖 PDF loaded, pages:', pdfDocument.numPages);
+
+  // Extract text from all pages
+  let fullText = '';
+  for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+    const page = await pdfDocument.getPage(pageNum);
+    const textContent = await page.getTextContent();
+
+    // Combine text items with spaces
+    const pageText = textContent.items
+      .map((item: any) => {
+        if ('str' in item) {
+          return item.str;
+        }
+        return '';
+      })
+      .join(' ');
+
+    fullText += pageText + '\n\n';
+  }
+
+  const trimmedText = fullText.trim();
+  console.log('✅ Text extracted:', trimmedText.length, 'characters');
+
+  if (trimmedText.length === 0) {
+    throw new Error('Could not extract text from PDF - document may be image-based or scanned');
+  }
+
+  return trimmedText;
+}
+
+/**
  * Translate and summarize a document using GPT-4o
- * Uses OpenAI Files API for PDFs (serverless-compatible)
+ * Uses pdfjs-dist for PDF text extraction (serverless-compatible)
  * Uses Vision API for images
  */
 export async function translateDocument(params: {
@@ -110,63 +173,19 @@ export async function translateDocument(params: {
   userPrompt += '\n\nPlease translate this document and provide a summary.';
 
   try {
-    console.log('Sending document to GPT-4o for translation...');
+    console.log('=== Translation Request Start ===');
     console.log('File URL:', fileUrl);
     console.log('MIME type:', mimeType);
+    console.log('Target language:', targetLanguage);
+    console.log('Domain:', domain);
 
     const isPDF = mimeType === 'application/pdf';
 
     if (isPDF) {
-      // Extract text from PDF
-      console.log('Downloading and parsing PDF...');
+      console.log('🔄 Processing PDF with text extraction...');
 
-      let response;
-      try {
-        response = await fetch(fileUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
-        }
-      } catch (fetchError) {
-        console.error('PDF fetch error:', fetchError);
-        throw new Error('Failed to download PDF file: ' + (fetchError instanceof Error ? fetchError.message : 'Unknown error'));
-      }
-
-      let arrayBuffer;
-      try {
-        arrayBuffer = await response.arrayBuffer();
-        console.log('PDF downloaded, size:', arrayBuffer.byteLength, 'bytes');
-      } catch (bufferError) {
-        console.error('ArrayBuffer error:', bufferError);
-        throw new Error('Failed to read PDF data: ' + (bufferError instanceof Error ? bufferError.message : 'Unknown error'));
-      }
-
-      let buffer;
-      try {
-        buffer = Buffer.from(arrayBuffer);
-        console.log('Buffer created successfully');
-      } catch (bufferConvertError) {
-        console.error('Buffer conversion error:', bufferConvertError);
-        throw new Error('Failed to convert PDF to buffer: ' + (bufferConvertError instanceof Error ? bufferConvertError.message : 'Unknown error'));
-      }
-
-      let data;
-      try {
-        console.log('Starting pdf-parse...');
-        data = await (pdfParse as any)(buffer);
-        console.log('pdf-parse completed, pages:', data?.numpages);
-      } catch (parseError) {
-        console.error('PDF parse error:', parseError);
-        console.error('Parse error stack:', parseError instanceof Error ? parseError.stack : 'No stack');
-        throw new Error('Failed to parse PDF (pdf-parse failed): ' + (parseError instanceof Error ? parseError.message : 'Unknown error'));
-      }
-
-      const pdfText = data.text;
-
-      if (!pdfText || pdfText.trim().length === 0) {
-        throw new Error('Could not extract text from PDF - document may be image-based');
-      }
-
-      console.log(`Extracted ${pdfText.length} characters from PDF (${data.numpages} pages)`);
+      // Extract text using pdfjs-dist
+      const documentText = await extractPDFText(fileUrl);
 
       // Send extracted text to GPT-4o
       const completion = await openai.chat.completions.create({
@@ -175,7 +194,7 @@ export async function translateDocument(params: {
           { role: 'system', content: TRANSLATION_SYSTEM_PROMPT },
           {
             role: 'user',
-            content: `${userPrompt}\n\nDocument content:\n\n${pdfText}`,
+            content: `${userPrompt}\n\nDocument content:\n\n${documentText}`,
           },
         ],
         response_format: {
@@ -196,7 +215,7 @@ export async function translateDocument(params: {
         throw new Error('No response from OpenAI');
       }
 
-      console.log('Translation completed successfully');
+      console.log('✅ Translation completed');
 
       const result: TranslationResult = JSON.parse(content);
 
@@ -209,7 +228,7 @@ export async function translateDocument(params: {
 
     } else {
       // For images, use Vision API directly
-      console.log('Using Vision API for image...');
+      console.log('🖼️ Processing image with Vision API...');
 
       const response = await openai.chat.completions.create({
         model: 'gpt-4o',
@@ -247,7 +266,7 @@ export async function translateDocument(params: {
         throw new Error('No response from OpenAI');
       }
 
-      console.log('Translation completed successfully');
+      console.log('✅ Translation completed');
 
       const result: TranslationResult = JSON.parse(content);
 
@@ -260,7 +279,8 @@ export async function translateDocument(params: {
     }
 
   } catch (error) {
-    console.error('OpenAI translation error:', error);
+    console.error('❌ Translation error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
     throw new Error('Failed to translate document: ' + (error instanceof Error ? error.message : 'Unknown error'));
   }
 }
