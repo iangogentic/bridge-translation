@@ -34,17 +34,19 @@ function LoginForm() {
       const result = await signIn.email({
         email,
         password,
+        callbackURL: "/dashboard",
       });
 
       if (result.error) {
         setError(result.error.message || "Invalid email or password");
+        setLoading(false);
       } else {
-        router.push("/dashboard");
+        // Force a hard reload to ensure session is picked up
+        window.location.href = "/dashboard";
       }
     } catch (err) {
       setError("Something went wrong. Please try again.");
       console.error(err);
-    } finally {
       setLoading(false);
     }
   };
