@@ -14,27 +14,32 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { auth } from '@/lib/auth';
-import { headers } from 'next/headers';
+import { auth, currentUser } from '@clerk/nextjs/server';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim();
 
 export async function POST(req: NextRequest) {
   try {
-    // Get authenticated user session
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    // Get authenticated user from Clerk
+    const { userId } = await auth();
 
-    if (!session?.user) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized. Please log in to upgrade.' },
         { status: 401 }
       );
     }
 
-    const userId = session.user.id;
-    const userEmail = session.user.email;
+    // Get user details for email
+    const user = await currentUser();
+    if (!user?.emailAddresses?.[0]?.emailAddress) {
+      return NextResponse.json(
+        { error: 'User email not found.' },
+        { status: 400 }
+      );
+    }
+
+    const userEmail = user.emailAddresses[0].emailAddress;
 
     // Get plan from request body (optional - default to pro)
     const body = await req.json().catch(() => ({}));

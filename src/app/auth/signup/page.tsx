@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signUp } from "@/lib/auth-client";
+import { useSignUp } from "@clerk/nextjs";
 
 export default function SignupPage() {
   const router = useRouter();
+  const { isLoaded, signUp, setActive } = useSignUp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -15,26 +16,45 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isLoaded) {
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      const result = await signUp.email({
-        email,
+      // Create the user account
+      const result = await signUp.create({
+        emailAddress: email,
         password,
-        name: name || "User",
-        callbackURL: "/dashboard",
+        firstName: name || "User",
       });
 
-      if (result.error) {
-        setError(result.error.message || "Failed to create account");
-        setLoading(false);
+      // Check if email verification is required
+      if (result.status === "complete") {
+        // User is created and verified, set active session
+        await setActive({ session: result.createdSessionId });
+        router.push("/dashboard");
+      } else if (result.status === "missing_requirements") {
+        // Email verification required - Clerk will handle this
+        // Prepare for email verification
+        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+        // For now, redirect to dashboard (Clerk will handle verification UI)
+        router.push("/dashboard");
       } else {
-        // Success - user is auto-logged in and redirected
-        window.location.href = "/dashboard";
+        setError("Unable to create account. Please try again.");
+        setLoading(false);
       }
-    } catch (err) {
-      setError("Something went wrong. Please try again.");
+    } catch (err: any) {
+      // Handle Clerk-specific errors
+      const clerkError = err.errors?.[0];
+      if (clerkError) {
+        setError(clerkError.message || "Failed to create account");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
       console.error(err);
       setLoading(false);
     }

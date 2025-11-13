@@ -7,11 +7,11 @@
  * Usage:
  * POST /api/admin/create-user
  * Headers: { "x-admin-api-key": "your-secret-key" }
- * Body: { email, name, password, role }
+ * Body: { email, firstName, lastName, password, role }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { clerkClient } from '@clerk/nextjs/server';
 import { db } from '@/db';
 import { user } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -33,12 +33,16 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    const { email, name, password, role } = body;
+    const { email, firstName, lastName, password, role } = body;
+
+    // Support both old 'name' field and new 'firstName'/'lastName' fields
+    const finalFirstName = firstName || body.name?.split(' ')[0] || '';
+    const finalLastName = lastName || body.name?.split(' ').slice(1).join(' ') || '';
 
     // Validate input
-    if (!email || !name || !password) {
+    if (!email || !finalFirstName || !password) {
       return NextResponse.json(
-        { error: 'Missing required fields: email, name, password' },
+        { error: 'Missing required fields: email, firstName (or name), password' },
         { status: 400 }
       );
     }
@@ -54,7 +58,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if user already exists
+    // Check if user already exists in our database
     const existingUser = await db
       .select()
       .from(user)
@@ -68,36 +72,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create user via Better Auth
-    const result = await auth.api.createUser({
-      body: {
-        email,
-        name,
-        password,
-      },
-    });
-
-    if (!result.user) {
-      throw new Error('Failed to create user');
+    // Create user via Clerk
+    let clerkUser;
+    try {
+      const client = await clerkClient();
+      clerkUser = await client.users.createUser({
+        emailAddress: [email],
+        password: password,
+        firstName: finalFirstName,
+        lastName: finalLastName,
+        publicMetadata: {
+          role: userRole,
+        },
+      });
+    } catch (clerkError: any) {
+      // Handle Clerk-specific errors
+      if (clerkError.errors?.[0]?.code === 'form_identifier_exists') {
+        return NextResponse.json(
+          { error: 'User with this email already exists in Clerk' },
+          { status: 409 }
+        );
+      }
+      throw clerkError;
     }
 
-    // Update with role
-    await db
-      .update(user)
-      .set({
-        role: userRole,
-        updatedAt: new Date(),
-      })
-      .where(eq(user.id, result.user.id));
+    // Create user record in our database
+    const fullName = `${finalFirstName}${finalLastName ? ' ' + finalLastName : ''}`;
+    await db.insert(user).values({
+      id: clerkUser.id,
+      clerkUserId: clerkUser.id,
+      name: fullName,
+      email: email,
+      emailVerified: clerkUser.emailAddresses[0]?.verification?.status === 'verified',
+      role: userRole,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     console.log(`[Admin API] Created user ${email} with role: ${userRole}`);
 
     return NextResponse.json({
       success: true,
       user: {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
+        id: clerkUser.id,
+        email: email,
+        name: fullName,
         role: userRole,
       },
     });

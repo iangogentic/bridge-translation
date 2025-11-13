@@ -3,11 +3,12 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "@/lib/auth-client";
+import { useSignIn } from "@clerk/nextjs";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isLoaded, signIn, setActive } = useSignIn();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -27,25 +28,38 @@ function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isLoaded) {
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      const result = await signIn.email({
-        email,
+      const result = await signIn.create({
+        identifier: email,
         password,
-        callbackURL: "/dashboard",
       });
 
-      if (result.error) {
-        setError(result.error.message || "Invalid email or password");
-        setLoading(false);
+      if (result.status === "complete") {
+        // Set the active session
+        await setActive({ session: result.createdSessionId });
+        // Redirect to dashboard
+        router.push("/dashboard");
       } else {
-        // Force a hard reload to ensure session is picked up
-        window.location.href = "/dashboard";
+        // Handle any other status (shouldn't happen for email/password)
+        setError("Unable to sign in. Please try again.");
+        setLoading(false);
       }
-    } catch (err) {
-      setError("Something went wrong. Please try again.");
+    } catch (err: any) {
+      // Handle Clerk-specific errors
+      const clerkError = err.errors?.[0];
+      if (clerkError) {
+        setError(clerkError.message || "Invalid email or password");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
       console.error(err);
       setLoading(false);
     }

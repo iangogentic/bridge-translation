@@ -1,114 +1,110 @@
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { db } from "@/db";
+import { user as userTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
+
 /**
- * Middleware for subscription-based access control
+ * Clerk Middleware for subscription-based access control
  *
- * Checks if users have active subscriptions before allowing access to protected routes.
- * Admins and internal users bypass subscription checks.
+ * Enforces:
+ * - Authentication for protected routes (via Clerk)
+ * - Subscription status for feature access
+ * - Admin/internal user bypass
+ * - Freemium model (free users with remaining translations)
  */
 
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+const publicRoutes = createRouteMatcher([
+  '/login',
+  '/pricing',
+  '/signup',
+  '/',
+  '/auth/signup',
+  '/auth/setup',
+  '/share/:path*',
+  '/api/auth(.*)',
+  '/api/checkout(.*)',
+  '/api/webhooks(.*)',
+  '/api/send-email(.*)',
+  '/api/admin(.*)',
+]);
 
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-
-  // Allow access to public pages and APIs WITHOUT session check (performance)
-  const publicPages = ['/login', '/pricing', '/signup', '/'];
-  const publicAPIs = ['/api/auth', '/api/checkout', '/api/webhooks', '/api/send-email', '/api/admin'];
-
-  // Allow auth flows (signup, setup) and share links (token-protected)
-  if (pathname.startsWith('/auth/signup') || pathname.startsWith('/auth/setup') || pathname.startsWith('/share/')) {
-    return NextResponse.next();
+export default clerkMiddleware(async (auth, request) => {
+  // Allow public routes without authentication
+  if (publicRoutes(request)) {
+    return;
   }
 
-  if (
-    publicPages.some(page => pathname === page) ||
-    publicAPIs.some(api => pathname.startsWith(api))
-  ) {
-    return NextResponse.next();
+  // Protect all other routes - requires Clerk authentication
+  const { userId } = await auth.protect();
+
+  if (!userId) {
+    return; // auth.protect() already handles redirect to login
   }
 
-  // Only import auth when needed (lazy loading to avoid timeouts on public pages)
-  const { auth } = await import('@/lib/auth');
-
-  // Get session only for protected routes with timeout
-  let session;
   try {
-    // Add timeout to prevent middleware hanging
-    const sessionPromise = auth.api.getSession({
-      headers: request.headers,
-    });
+    // Get user subscription data from local database
+    // (synced from Clerk via webhook)
+    const dbUser = await db
+      .select()
+      .from(userTable)
+      .where(eq(userTable.clerkUserId, userId))
+      .limit(1);
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Session check timeout')), 3000)
-    );
-
-    session = await Promise.race([sessionPromise, timeoutPromise]) as any;
-  } catch (error) {
-    console.error('[Middleware] Session check failed:', error);
-    // If session check fails or times out, redirect to login
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  // If no session, redirect to login
-  if (!session?.user) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  const user = session.user as any; // Type assertion for custom fields
-
-  // Debug logging
-  console.log(`[Middleware] User ${user.email} session data:`, {
-    role: user.role,
-    subscriptionPlan: user.subscriptionPlan,
-    subscriptionStatus: user.subscriptionStatus,
-    translationCount: user.translationCount,
-    translationLimit: user.translationLimit,
-  });
-
-  // Check if user is admin or internal - they bypass subscription checks
-  if (user.role === 'admin' || user.role === 'internal') {
-    console.log(`[Middleware] Admin/Internal user ${user.email} - bypassing subscription check`);
-    return NextResponse.next();
-  }
-
-  // For regular users, check subscription status
-  const hasActiveSubscription =
-    user.subscriptionStatus === 'active' ||
-    user.subscriptionStatus === 'trialing';
-
-  // Check if trial is still valid
-  const trialValid = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
-
-  // Allow free users with remaining translations (freemium model)
-  const isFreeWithUsageRemaining =
-    user.subscriptionPlan === 'free' &&
-    (user.translationCount || 0) < (user.translationLimit || 5);
-
-  if (!hasActiveSubscription && !trialValid && !isFreeWithUsageRemaining) {
-    // User doesn't have active subscription - redirect to pricing
-    console.log(`[Middleware] User ${user.email} - no active subscription, redirecting to pricing`);
-
-    // Don't redirect if already on pricing or checkout pages
-    if (pathname.startsWith('/pricing') || pathname.startsWith('/checkout')) {
-      return NextResponse.next();
+    if (!dbUser.length) {
+      // User exists in Clerk but not yet synced to local DB
+      // This can happen immediately after signup due to webhook delay
+      // Allow access - user will appear in DB within seconds via webhook
+      return;
     }
 
-    return NextResponse.redirect(new URL('/pricing?reason=subscription_required', request.url));
-  }
+    const user = dbUser[0];
 
-  // User has active subscription or valid trial
-  return NextResponse.next();
-}
+    // Admin and internal users bypass all subscription checks
+    if (user.role === 'admin' || user.role === 'internal') {
+      return;
+    }
+
+    // For regular customers, check subscription status
+    const hasActiveSubscription =
+      user.subscriptionStatus === 'active' ||
+      user.subscriptionStatus === 'trialing';
+
+    // Check if trial period is still valid
+    const trialValid = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
+
+    // Check if free user still has remaining translations (freemium model)
+    const isFreeWithUsageRemaining =
+      user.subscriptionPlan === 'free' &&
+      (user.translationCount || 0) < (user.translationLimit || 5);
+
+    // If user has no valid subscription, trial, or free usage - redirect to pricing
+    if (!hasActiveSubscription && !trialValid && !isFreeWithUsageRemaining) {
+      // Don't redirect if already on pricing or checkout pages
+      const pathname = request.nextUrl.pathname;
+      if (pathname.startsWith('/pricing') || pathname.startsWith('/checkout')) {
+        return;
+      }
+
+      // Redirect to pricing page with subscription required reason
+      return NextResponse.redirect(
+        new URL('/pricing?reason=subscription_required', request.url)
+      );
+    }
+  } catch (error) {
+    // If subscription check fails, log but don't block access
+    // Better to let user through than break the app
+    console.error('[Middleware] Subscription check failed:', error);
+    return;
+  }
+});
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/* (all Next.js internal files)
-     * - static files (images, icons, fonts, etc.)
-     * - favicon
-     * This ensures middleware only runs on actual page routes
-     */
-    '/((?!_next|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|eot)$).*)',
+    // Skip Next.js internals and all static files, unless found in search params
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes
+    "/(api|trpc)(.*)",
   ],
 };

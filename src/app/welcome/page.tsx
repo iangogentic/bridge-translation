@@ -9,21 +9,21 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from '@/lib/auth-client';
+import { useUser } from '@clerk/nextjs';
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const { user, isLoaded } = useUser();
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
     // Redirect to login if not authenticated
-    if (!isPending && !session) {
+    if (isLoaded && !user) {
       router.push('/login');
     }
-  }, [session, isPending, router]);
+  }, [user, isLoaded, router]);
 
-  if (isPending) {
+  if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
@@ -31,7 +31,7 @@ export default function WelcomePage() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return null;
   }
 
@@ -162,17 +162,16 @@ export default function WelcomePage() {
             <div className="mt-12 bg-white rounded-2xl shadow-lg p-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                  {session.user?.name?.charAt(0).toUpperCase() || 'U'}
+                  {user.firstName?.charAt(0).toUpperCase() || user.emailAddresses[0]?.emailAddress?.charAt(0).toUpperCase() || 'U'}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900">{session.user?.name}</h3>
-                  <p className="text-sm text-gray-600">{session.user?.email}</p>
+                  <h3 className="font-semibold text-gray-900">{user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.emailAddresses[0]?.emailAddress}</h3>
+                  <p className="text-sm text-gray-600">{user.emailAddresses[0]?.emailAddress}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-gray-500 uppercase tracking-wide">Plan</p>
                   <p className="font-semibold text-purple-600 capitalize">
-                    {/* @ts-ignore */}
-                    {session.user?.subscriptionPlan || 'Starter'}
+                    Starter
                   </p>
                 </div>
               </div>

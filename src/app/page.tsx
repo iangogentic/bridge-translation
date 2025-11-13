@@ -8,11 +8,12 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useSession, signOut } from '@/lib/auth-client';
+import { useUser, useClerk } from '@clerk/nextjs';
 
 export default function Home() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +25,7 @@ export default function Home() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.push('/');
+    router.push('/login');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,7 +98,7 @@ export default function Home() {
     if (!file) return;
 
     // Check if user is logged in
-    if (!session) {
+    if (!user) {
       router.push('/login');
       return;
     }
@@ -131,7 +132,7 @@ export default function Home() {
           mimeType: file.type,
           fileSize: file.size,
           targetLang: targetLang,
-          userId: session.user.id, // Use actual logged-in user ID
+          userId: user.id, // Use actual logged-in user ID
         }),
       });
 
@@ -173,7 +174,7 @@ export default function Home() {
               <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Bridge</span>
             </Link>
             <div className="flex items-center gap-3">
-              {session ? (
+              {isLoaded && user ? (
                 <>
                   <Link href="/dashboard" className="px-5 py-2.5 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-all duration-200 hover:bg-white/50 rounded-lg">
                     Dashboard
@@ -190,7 +191,7 @@ export default function Home() {
                   <Link href="/login" className="px-5 py-2.5 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-all duration-200 hover:bg-white/50 rounded-lg">
                     Login
                   </Link>
-                  <Link href="/signup" className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105">
+                  <Link href="/auth/signup" className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105">
                     Sign Up
                   </Link>
                 </>

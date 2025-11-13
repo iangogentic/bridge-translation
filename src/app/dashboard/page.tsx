@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useSession } from '@/lib/auth-client';
+import { useUser } from '@clerk/nextjs';
 
 interface DocumentItem {
   id: string;
@@ -23,21 +23,21 @@ interface DocumentItem {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const { user, isLoaded } = useUser();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isPending && !session) {
+    if (isLoaded && !user) {
       router.push('/login');
     }
-  }, [session, isPending, router]);
+  }, [user, isLoaded, router]);
 
   useEffect(() => {
     // Only fetch documents if user is logged in
-    if (!session) return;
+    if (!user) return;
 
     async function fetchDocuments() {
       try {
@@ -53,7 +53,7 @@ export default function DashboardPage() {
     }
 
     fetchDocuments();
-  }, [session]);
+  }, [user]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
