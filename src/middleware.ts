@@ -15,8 +15,8 @@ export async function middleware(request: NextRequest) {
   const publicPages = ['/login', '/pricing', '/signup', '/'];
   const publicAPIs = ['/api/auth', '/api/checkout', '/api/webhooks', '/api/send-email', '/api/admin'];
 
-  // Allow setup flow and share links (token-protected)
-  if (pathname.startsWith('/auth/setup') || pathname.startsWith('/share/')) {
+  // Allow auth flows (signup, setup) and share links (token-protected)
+  if (pathname.startsWith('/auth/signup') || pathname.startsWith('/auth/setup') || pathname.startsWith('/share/')) {
     return NextResponse.next();
   }
 
