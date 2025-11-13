@@ -8,7 +8,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useUser } from '@clerk/nextjs';
 
 interface DocumentItem {
   id: string;
@@ -23,21 +22,18 @@ interface DocumentItem {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isLoaded } = useUser();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
-  // Redirect to login if not authenticated
+  // TEMP: Disable auth checks for local testing
   useEffect(() => {
-    if (isLoaded && !user) {
-      router.push('/login');
-    }
-  }, [user, isLoaded, router]);
+    console.log('[Dashboard] Local testing mode - auth disabled');
+  }, []);
 
   useEffect(() => {
-    // Only fetch documents if user is logged in
-    if (!user) return;
+    // Fetch documents immediately (no auth check for local testing)
 
     async function fetchDocuments() {
       try {
@@ -53,7 +49,7 @@ export default function DashboardPage() {
     }
 
     fetchDocuments();
-  }, [user]);
+  }, []);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -69,6 +65,7 @@ export default function DashboardPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Show loading while documents are loading
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden flex items-center justify-center">

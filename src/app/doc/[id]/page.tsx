@@ -8,6 +8,7 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface DocumentData {
   id: string;
@@ -171,39 +172,54 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       </div>
 
       {/* Premium Navigation */}
-      <nav className="bg-white/70 backdrop-blur-xl border-b border-white/20 sticky top-0 z-50 shadow-sm relative">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="group flex items-center gap-3 hover:opacity-90 transition-all">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300">
-                <span className="text-white font-extrabold text-lg">B</span>
-              </div>
-              <span className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Bridge</span>
+      <nav className="bg-white/95 backdrop-blur-xl border-b border-gray-200 sticky top-0 z-50 shadow-lg">
+        <div className="container mx-auto px-4 md:px-8">
+          <div className="flex items-center justify-between h-20 md:h-24">
+            {/* Logo - Much Larger */}
+            <Link href="/" className="flex-shrink-0 hover:opacity-90 transition-all duration-300 hover:scale-105">
+              <Image
+                src="/logo.png"
+                alt="Bridge Logo"
+                width={800}
+                height={178}
+                className="h-14 md:h-20 w-auto"
+                priority
+              />
             </Link>
-            <div className="flex items-center gap-4">
+
+            {/* Action Buttons with better spacing */}
+            <div className="flex items-center gap-3 md:gap-4">
               <Link
                 href="/dashboard"
-                className="px-5 py-2.5 text-sm font-bold text-gray-700 hover:text-gray-900 transition-colors hover:scale-105 duration-300"
+                className="px-4 md:px-6 py-2.5 md:py-3 text-sm md:text-base font-semibold text-gray-700 hover:text-gray-900 transition-all duration-200 hover:bg-gray-100 rounded-xl"
               >
                 Dashboard
               </Link>
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="group px-5 py-2.5 bg-red-50/80 backdrop-blur-sm text-red-600 text-sm font-bold rounded-xl hover:bg-red-100 transition-all border border-red-200 hover:border-red-300 flex items-center gap-2 shadow-md hover:shadow-lg hover:scale-105 duration-300"
+                className="hidden md:flex items-center gap-2 px-5 py-3 bg-red-50 text-red-600 text-base font-semibold rounded-xl hover:bg-red-100 transition-all duration-200 border border-red-200 hover:scale-105"
               >
-                <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
                 Delete
               </button>
               <button
-                onClick={handleExport}
-                className="group px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-bold rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-105 duration-300 flex items-center gap-2"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="md:hidden p-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200"
               >
-                <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+              <button
+                onClick={handleExport}
+                className="px-5 md:px-8 py-2.5 md:py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm md:text-base font-bold rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                Export
+                <span className="hidden md:inline">Export</span>
               </button>
             </div>
           </div>
@@ -240,8 +256,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       </div>
 
       {/* Main Content - Premium Side by Side */}
-      <div className="container mx-auto px-6 py-8 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-260px)]">
+      <div className="container mx-auto px-4 md:px-6 py-6 md:py-8 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8 min-h-[calc(100vh-280px)] lg:h-[calc(100vh-260px)]">
           {/* Left Panel - Original Document with Glassmorphism */}
           <div className="group bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/40 overflow-hidden flex flex-col hover:shadow-3xl transition-all duration-500">
             <div className="bg-gradient-to-r from-gray-100/80 to-gray-200/80 backdrop-blur-sm border-b border-white/30 px-6 py-5">
@@ -329,7 +345,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     <span className="text-lg font-extrabold text-gray-900">English Translation</span>
                   </div>
                   <div
-                    className="prose prose-base max-w-none prose-headings:text-gray-900 prose-headings:font-bold prose-p:text-gray-700 prose-p:leading-relaxed prose-strong:text-gray-900 prose-ul:text-gray-700 prose-li:my-1"
+                    className="prose prose-base max-w-none
+                      prose-headings:text-gray-900 prose-headings:font-bold
+                      prose-p:text-gray-900 prose-p:leading-relaxed
+                      prose-strong:text-gray-900 prose-strong:font-bold
+                      prose-ul:text-gray-900 prose-ol:text-gray-900
+                      prose-li:text-gray-900 prose-li:my-1
+                      [&>*]:text-gray-900 [&_p]:text-gray-900 [&_span]:text-gray-900
+                      [&_div]:text-gray-900 [&_li]:text-gray-900"
                     dangerouslySetInnerHTML={{ __html: result.translation_html }}
                   />
                 </div>

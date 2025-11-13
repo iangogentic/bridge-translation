@@ -1,8 +1,8 @@
 "use client";
 
-import { SignIn } from "@clerk/nextjs";
+import { SignUp } from "@clerk/nextjs";
 
-export default function LoginPage() {
+export default function SignUpPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Animated background blobs */}
@@ -11,17 +11,9 @@ export default function LoginPage() {
       <div className="absolute -bottom-10 left-1/2 w-64 h-64 bg-gradient-to-br from-pink-400 to-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
 
       <div className="relative z-10">
-        <SignIn
-          appearance={{
-            elements: {
-              rootBox: "mx-auto",
-              card: "bg-white/70 backdrop-blur-2xl shadow-2xl border border-white/40",
-            }
-          }}
-          routing="path"
-          path="/login"
-          signUpUrl="/auth/signup"
-          afterSignInUrl="/dashboard"
+        <SignUp
+          afterSignUpUrl="/dashboard"
+          redirectUrl="/dashboard"
         />
       </div>
     </div>

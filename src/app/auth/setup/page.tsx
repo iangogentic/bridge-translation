@@ -175,7 +175,7 @@ function SetupForm() {
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
                 Remember your password?{' '}
-                <a href="/login" className="text-purple-600 font-semibold hover:underline">
+                <a href="/sign-in" className="text-purple-600 font-semibold hover:underline">
                   Sign in
                 </a>
               </p>

@@ -116,7 +116,7 @@ export default function PricingPage() {
             </Link>
             <div className="flex items-center space-x-4">
               <Link
-                href="/login"
+                href="/sign-in"
                 className="text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Log in
@@ -283,7 +283,7 @@ export default function PricingPage() {
         <div className="text-center mt-16">
           <p className="text-gray-600 mb-4">
             Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-purple-600 hover:text-purple-700">
+            <Link href="/sign-in" className="font-semibold text-purple-600 hover:text-purple-700">
               Log in here
             </Link>
           </p>
