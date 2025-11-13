@@ -52,7 +52,10 @@ export async function POST(req: NextRequest) {
 
     // Extract email
     const identifier = verificationRecord[0].identifier;
-    const email = identifier.replace('setup-', '');
+    const rawEmail = identifier.replace('setup-', '');
+
+    // Normalize email to lowercase to match Better Auth behavior
+    const email = rawEmail.trim().toLowerCase();
 
     // Find user
     const userRecord = await db

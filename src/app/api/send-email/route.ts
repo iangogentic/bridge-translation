@@ -43,14 +43,14 @@ export async function POST(request: NextRequest) {
     console.log('📧 Sending email via Resend:', {
       to,
       subject,
-      from: from || 'Bridge <onboarding@resend.dev>',
+      from: from || 'Bridge <onboarding@bridgetogether.app>',
       apiKeyPresent: !!apiKey,
       apiKeyLength: apiKey.length,
     });
 
     // Send email via Resend
     const { data, error } = await resend.emails.send({
-      from: from || 'Bridge <onboarding@resend.dev>',
+      from: from || 'Bridge <onboarding@bridgetogether.app>',
       to: [to],
       subject,
       html,

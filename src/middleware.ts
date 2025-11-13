@@ -13,7 +13,12 @@ export async function middleware(request: NextRequest) {
 
   // Allow access to public pages and APIs WITHOUT session check (performance)
   const publicPages = ['/login', '/pricing', '/signup', '/'];
-  const publicAPIs = ['/api/auth', '/api/checkout', '/api/webhooks', '/api/send-email'];
+  const publicAPIs = ['/api/auth', '/api/checkout', '/api/webhooks', '/api/send-email', '/api/admin'];
+
+  // Allow setup flow and share links (token-protected)
+  if (pathname.startsWith('/auth/setup') || pathname.startsWith('/share/')) {
+    return NextResponse.next();
+  }
 
   if (
     publicPages.some(page => pathname === page) ||

@@ -24,6 +24,7 @@ export const user = pgTable("user", {
 
   // Role-based access control
   role: text("role").default("customer").notNull(), // customer | admin | internal
+  banned: boolean("banned").default(false),
 
   // Stripe Integration Fields
   stripeCustomerId: text("stripe_customer_id"),
