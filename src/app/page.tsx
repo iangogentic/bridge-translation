@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession, signOut } from '@/lib/auth-client';
@@ -17,6 +17,10 @@ export default function Home() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [targetLang, setTargetLang] = useState('en');
+  const [showCamera, setShowCamera] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cameraFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -26,21 +30,66 @@ export default function Home() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      // Validate file type
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-      if (!allowedTypes.includes(selectedFile.type)) {
-        setError('Please select a PDF, JPG, or PNG file');
-        return;
-      }
+      validateAndSetFile(selectedFile);
+    }
+  };
 
-      // Validate file size (10MB max)
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setError('File size must be less than 10MB');
-        return;
-      }
+  const validateAndSetFile = (selectedFile: File) => {
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedTypes.includes(selectedFile.type)) {
+      setError('Please select a PDF, JPG, or PNG file');
+      return;
+    }
 
-      setFile(selectedFile);
-      setError(null);
+    // Validate file size (10MB max)
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
+      return;
+    }
+
+    setFile(selectedFile);
+    setError(null);
+  };
+
+  const handleStartCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setShowCamera(true);
+      }
+    } catch (err) {
+      setError('Unable to access camera. Please check permissions.');
+    }
+  };
+
+  const handleCapturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext('2d');
+      if (context) {
+        canvasRef.current.width = videoRef.current.videoWidth;
+        canvasRef.current.height = videoRef.current.videoHeight;
+        context.drawImage(videoRef.current, 0, 0);
+
+        canvasRef.current.toBlob((blob) => {
+          if (blob) {
+            const capturedFile = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            validateAndSetFile(capturedFile);
+            handleStopCamera();
+          }
+        }, 'image/jpeg', 0.95);
+      }
+    }
+  };
+
+  const handleStopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      setShowCamera(false);
     }
   };
 
@@ -174,39 +223,105 @@ export default function Home() {
 
           {/* Upload Card with Glassmorphism */}
           <div className="bg-white/70 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 border border-white/40 hover:shadow-3xl transition-all duration-500">
-            <div className="mb-6">
-              <label
-                htmlFor="file-upload"
-                className="block text-lg font-bold text-gray-900 mb-2"
-              >
-                Upload a document
-              </label>
-              <p className="text-sm text-gray-600 mb-5 flex items-center gap-2">
-                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                PDF, JPG, or PNG • Maximum 10MB
-              </p>
+            {!showCamera ? (
+              <>
+                <div className="mb-6">
+                  <label className="block text-lg font-bold text-gray-900 mb-2">
+                    Upload or capture a document
+                  </label>
+                  <p className="text-sm text-gray-600 mb-5 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    PDF, JPG, or PNG • Maximum 10MB
+                  </p>
 
-              <input
-                id="file-upload"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={handleFileChange}
-                disabled={uploading}
-                className="block w-full text-sm text-gray-900
-                  file:mr-4 file:py-4 file:px-8
-                  file:rounded-xl file:border-0
-                  file:text-sm file:font-bold
-                  file:bg-gradient-to-r file:from-blue-600 file:to-purple-600
-                  file:text-white
-                  hover:file:from-blue-700 hover:file:to-purple-700
-                  file:cursor-pointer file:transition-all file:duration-300
-                  file:shadow-lg hover:file:shadow-xl hover:file:scale-105
-                  cursor-pointer
-                  disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </div>
+                  {/* Two-column layout for file and camera options */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    {/* File Upload */}
+                    <div>
+                      <label htmlFor="file-upload" className="block text-sm font-semibold text-gray-700 mb-3">
+                        📁 Choose File
+                      </label>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={handleFileChange}
+                        disabled={uploading}
+                        className="block w-full text-sm text-gray-900
+                          file:mr-4 file:py-3 file:px-4
+                          file:rounded-lg file:border-0
+                          file:text-xs file:font-bold
+                          file:bg-gradient-to-r file:from-blue-600 file:to-blue-700
+                          file:text-white
+                          hover:file:from-blue-700 hover:file:to-blue-800
+                          file:cursor-pointer file:transition-all file:duration-300
+                          file:shadow-lg hover:file:shadow-xl
+                          cursor-pointer
+                          disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                    </div>
+
+                    {/* Camera Capture */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        📸 Take Picture
+                      </label>
+                      <button
+                        onClick={handleStartCamera}
+                        disabled={uploading || file !== null}
+                        className="w-full py-3 px-4 bg-gradient-to-r from-green-600 to-green-700
+                          text-white text-xs font-bold rounded-lg
+                          hover:from-green-700 hover:to-green-800
+                          focus:outline-none focus:ring-2 focus:ring-green-500
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          transition-all duration-300 shadow-lg hover:shadow-xl"
+                      >
+                        Open Camera
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Camera View */
+              <div className="mb-6">
+                <label className="block text-lg font-bold text-gray-900 mb-4">
+                  📷 Capture Document
+                </label>
+                <div className="relative bg-black rounded-xl overflow-hidden shadow-lg mb-4">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-64 md:h-96 object-cover"
+                  />
+                  <canvas ref={canvasRef} className="hidden" />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCapturePhoto}
+                    className="flex-1 py-3 px-4 bg-gradient-to-r from-yellow-500 to-orange-600
+                      text-white font-bold rounded-lg
+                      hover:from-yellow-600 hover:to-orange-700
+                      focus:outline-none focus:ring-2 focus:ring-orange-500
+                      transition-all duration-300 shadow-lg hover:shadow-xl"
+                  >
+                    ✓ Capture
+                  </button>
+                  <button
+                    onClick={handleStopCamera}
+                    className="flex-1 py-3 px-4 bg-gray-400 hover:bg-gray-500
+                      text-white font-bold rounded-lg
+                      focus:outline-none focus:ring-2 focus:ring-gray-400
+                      transition-all duration-300 shadow-lg hover:shadow-xl"
+                  >
+                    ✕ Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {file && (
               <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-100 shadow-inner animate-in slide-in-from-top duration-300">
