@@ -56,6 +56,15 @@ export async function middleware(request: NextRequest) {
 
   const user = session.user as any; // Type assertion for custom fields
 
+  // Debug logging
+  console.log(`[Middleware] User ${user.email} session data:`, {
+    role: user.role,
+    subscriptionPlan: user.subscriptionPlan,
+    subscriptionStatus: user.subscriptionStatus,
+    translationCount: user.translationCount,
+    translationLimit: user.translationLimit,
+  });
+
   // Check if user is admin or internal - they bypass subscription checks
   if (user.role === 'admin' || user.role === 'internal') {
     console.log(`[Middleware] Admin/Internal user ${user.email} - bypassing subscription check`);
