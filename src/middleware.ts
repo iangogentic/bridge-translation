@@ -70,7 +70,12 @@ export async function middleware(request: NextRequest) {
   // Check if trial is still valid
   const trialValid = user.trialEndsAt && new Date(user.trialEndsAt) > new Date();
 
-  if (!hasActiveSubscription && !trialValid) {
+  // Allow free users with remaining translations (freemium model)
+  const isFreeWithUsageRemaining =
+    user.subscriptionPlan === 'free' &&
+    (user.translationCount || 0) < (user.translationLimit || 5);
+
+  if (!hasActiveSubscription && !trialValid && !isFreeWithUsageRemaining) {
     // User doesn't have active subscription - redirect to pricing
     console.log(`[Middleware] User ${user.email} - no active subscription, redirecting to pricing`);
 
