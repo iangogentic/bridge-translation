@@ -6,9 +6,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-// Make Resend optional during build (use empty string if not set)
-const resend = new Resend(process.env.RESEND_API_KEY || 'dummy-key-for-build');
-
 interface EmailRequest {
   to: string;
   subject: string;
@@ -30,19 +27,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if Resend API key is configured
-    if (!process.env.RESEND_API_KEY) {
-      console.error('RESEND_API_KEY is not configured');
+    // Check if Resend API key is configured at runtime
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.error('❌ RESEND_API_KEY is not configured in environment variables');
       return NextResponse.json(
         { error: 'Email service is not configured' },
         { status: 500 }
       );
     }
 
-    console.log('Sending email via Resend:', {
+    // Initialize Resend client with runtime API key (not at module level)
+    const resend = new Resend(apiKey);
+
+    console.log('📧 Sending email via Resend:', {
       to,
       subject,
       from: from || 'Bridge <onboarding@resend.dev>',
+      apiKeyPresent: !!apiKey,
+      apiKeyLength: apiKey.length,
     });
 
     // Send email via Resend

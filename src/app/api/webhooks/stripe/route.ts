@@ -86,14 +86,17 @@ export async function POST(req: NextRequest) {
  * Handle successful checkout - create user account and send welcome email
  */
 async function handleCheckoutCompleted(session: any) {
-  const email = session.customer_email || session.metadata?.email;
+  const rawEmail = session.customer_email || session.metadata?.email;
   const customerId = session.customer;
   const subscriptionId = session.subscription;
 
-  if (!email) {
+  if (!rawEmail) {
     console.error('No email found in checkout session');
     return;
   }
+
+  // Normalize email to lowercase to match Better Auth behavior
+  const email = rawEmail.trim().toLowerCase();
 
   console.log(`✅ Checkout completed for ${email}`);
 
@@ -201,6 +204,9 @@ async function handleCheckoutCompleted(session: any) {
   const setupUrl = `${APP_URL}/auth/setup?token=${token}`;
 
   try {
+    console.log(`📧 Attempting to send welcome email to ${email}...`);
+    console.log(`📧 Email API URL: ${APP_URL}/api/send-email`);
+
     // Use Resend to send email
     const response = await fetch(`${APP_URL}/api/send-email`, {
       method: 'POST',
@@ -281,13 +287,34 @@ async function handleCheckoutCompleted(session: any) {
       }),
     });
 
+    console.log(`📧 Email API response status: ${response.status} ${response.statusText}`);
+
     if (response.ok) {
-      console.log(`✅ Welcome email sent to ${email}`);
+      const responseData = await response.json();
+      console.log(`✅ Welcome email sent successfully to ${email}`, {
+        messageId: responseData.messageId,
+        success: responseData.success,
+      });
     } else {
-      console.error(`❌ Failed to send welcome email to ${email}`);
+      // Parse and log the error response
+      let errorDetails;
+      try {
+        errorDetails = await response.json();
+      } catch (parseError) {
+        errorDetails = await response.text();
+      }
+      console.error(`❌ Failed to send welcome email to ${email}`, {
+        status: response.status,
+        statusText: response.statusText,
+        errorDetails: errorDetails,
+      });
     }
-  } catch (emailError) {
-    console.error('Error sending welcome email:', emailError);
+  } catch (emailError: any) {
+    console.error('❌ Error sending welcome email:', {
+      error: emailError.message,
+      stack: emailError.stack,
+      email: email,
+    });
     // Don't fail the webhook if email fails - user account is still created
   }
 }
