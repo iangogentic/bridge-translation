@@ -22,7 +22,7 @@ export default function SignupPage() {
       const result = await signUp.email({
         email,
         password,
-        name: name || undefined,
+        name: name || "User",
         callbackURL: "/dashboard",
       });
 
