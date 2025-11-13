@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { documents, results } from '@/db/schema';
+import { documents, results, user } from '@/db/schema';
 import { translateDocument, calculateConfidence } from '@/lib/openai';
 import { eq } from 'drizzle-orm';
 
@@ -40,6 +40,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
+      );
+    }
+
+    // Check translation limit BEFORE processing
+    const [currentUser] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if user has exceeded their translation limit
+    if (currentUser.translationCount >= currentUser.translationLimit) {
+      return NextResponse.json(
+        {
+          error: 'Translation limit exceeded',
+          message: `You have reached your translation limit of ${currentUser.translationLimit} translations. Please upgrade your plan to continue.`,
+          limit: currentUser.translationLimit,
+          count: currentUser.translationCount,
+          plan: currentUser.subscriptionPlan,
+          upgradeUrl: '/settings/billing',
+        },
+        { status: 403 }
       );
     }
 
@@ -110,6 +139,17 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
+      // Increment translation count AFTER successful translation
+      await db
+        .update(user)
+        .set({
+          translationCount: currentUser.translationCount + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(user.id, userId));
+
+      console.log(`✅ Translation count incremented: ${currentUser.translationCount + 1}/${currentUser.translationLimit}`);
+
       return NextResponse.json({
         documentId: document.id,
         resultId: result.id,
@@ -118,6 +158,11 @@ export async function POST(request: NextRequest) {
         detected_language: result.detectedLanguage,
         processing_time_ms: result.processingTimeMs,
         confidence: result.confidence,
+        usage: {
+          count: currentUser.translationCount + 1,
+          limit: currentUser.translationLimit,
+          remaining: currentUser.translationLimit - (currentUser.translationCount + 1),
+        },
       });
     }
 
@@ -147,6 +192,17 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    // Increment translation count AFTER successful translation
+    await db
+      .update(user)
+      .set({
+        translationCount: currentUser.translationCount + 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(user.id, userId));
+
+    console.log(`✅ Translation count incremented: ${currentUser.translationCount + 1}/${currentUser.translationLimit}`);
+
     return NextResponse.json({
       documentId: document.id,
       resultId: result.id,
@@ -155,6 +211,11 @@ export async function POST(request: NextRequest) {
       detected_language: result.detectedLanguage,
       processing_time_ms: result.processingTimeMs,
       confidence: result.confidence,
+      usage: {
+        count: currentUser.translationCount + 1,
+        limit: currentUser.translationLimit,
+        remaining: currentUser.translationLimit - (currentUser.translationCount + 1),
+      },
     });
 
   } catch (error) {

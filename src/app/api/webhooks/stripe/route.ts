@@ -2,10 +2,10 @@
  * Stripe Webhook Handler
  *
  * Receives events from Stripe after payments and subscription changes.
- * Creates user accounts, sends welcome emails, and manages subscription status.
+ * Handles both user creation (legacy) and subscription upgrades (freemium model).
  *
  * Events handled:
- * - checkout.session.completed: New subscription → Create user + send welcome email
+ * - checkout.session.completed: New subscription → Create user OR upgrade existing user
  * - customer.subscription.updated: Plan change or status update
  * - customer.subscription.deleted: Cancellation
  * - invoice.payment_failed: Failed payment → Send reminder email
@@ -18,6 +18,7 @@ import { user, verification } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { auth } from '@/lib/auth';
+import { getTranslationLimit } from '@/lib/subscription';
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim() || '';
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim();
@@ -83,22 +84,23 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Handle successful checkout - create user account and send welcome email
+ * Handle successful checkout - upgrade existing user OR create new user (legacy)
  */
 async function handleCheckoutCompleted(session: any) {
   const rawEmail = session.customer_email || session.metadata?.email;
   const customerId = session.customer;
   const subscriptionId = session.subscription;
+  const userId = session.metadata?.userId; // NEW: For freemium upgrades
 
-  if (!rawEmail) {
-    console.error('No email found in checkout session');
+  if (!rawEmail && !userId) {
+    console.error('No email or userId found in checkout session');
     return;
   }
 
   // Normalize email to lowercase to match Better Auth behavior
-  const email = rawEmail.trim().toLowerCase();
+  const email = rawEmail?.trim().toLowerCase();
 
-  console.log(`✅ Checkout completed for ${email}`);
+  console.log(`✅ Checkout completed${userId ? ' (upgrade)' : ' (new user)'}: ${email || userId}`);
 
   // Fetch subscription details from Stripe
   const subscription: any = await stripe.subscriptions.retrieve(subscriptionId);
@@ -109,18 +111,26 @@ async function handleCheckoutCompleted(session: any) {
   if (priceId?.includes('pro')) planName = 'pro';
   if (priceId?.includes('enterprise')) planName = 'enterprise';
 
-  // Check if user already exists (by email)
-  const existingUser = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
+  // Get translation limit for the plan
+  const translationLimit = getTranslationLimit(planName);
 
-  let userId: string;
+  // NEW: Freemium upgrade flow - if userId is provided in metadata
+  if (userId) {
+    console.log(`📈 Upgrading existing user: ${userId}`);
 
-  if (existingUser.length > 0) {
-    // User exists - update with Stripe info
-    userId = existingUser[0].id;
+    // Find user by ID
+    const existingUser = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (existingUser.length === 0) {
+      console.error(`No user found with ID ${userId}`);
+      return;
+    }
+
+    // Update user with Stripe info and new plan limits
     await db
       .update(user)
       .set({
@@ -131,11 +141,122 @@ async function handleCheckoutCompleted(session: any) {
         subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
         subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
         trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+        translationLimit: translationLimit, // Update limit based on new plan
         updatedAt: new Date(),
       })
       .where(eq(user.id, userId));
 
-    console.log(`Updated existing user ${userId} with Stripe subscription`);
+    console.log(`✅ User ${userId} upgraded to ${planName} plan with ${translationLimit} translations`);
+
+    // Send upgrade confirmation email
+    try {
+      await fetch(`${APP_URL}/api/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: existingUser[0].email,
+          subject: `🎉 Welcome to Bridge ${planName.charAt(0).toUpperCase() + planName.slice(1)}!`,
+          html: `
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              </head>
+              <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center; border-radius: 10px 10px 0 0;">
+                  <h1 style="color: white; margin: 0; font-size: 28px;">Upgrade Successful!</h1>
+                </div>
+
+                <div style="background: white; padding: 40px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+                  <p style="font-size: 16px; margin-bottom: 20px;">Hi ${existingUser[0].name},</p>
+
+                  <p style="font-size: 16px; margin-bottom: 20px;">
+                    Thank you for upgrading to Bridge <strong>${planName.charAt(0).toUpperCase() + planName.slice(1)}</strong>! Your payment was successful.
+                  </p>
+
+                  <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                    <h3 style="margin-top: 0; color: #333;">Your New Plan</h3>
+                    <ul style="font-size: 14px; color: #666; line-height: 2;">
+                      <li><strong>Plan:</strong> ${planName.charAt(0).toUpperCase() + planName.slice(1)}</li>
+                      <li><strong>Translation Limit:</strong> ${translationLimit} per month</li>
+                      <li><strong>Status:</strong> ${subscription.trial_end ? 'Free Trial' : 'Active'}</li>
+                      ${subscription.trial_end ? `<li><strong>Trial ends:</strong> ${new Date(subscription.trial_end * 1000).toLocaleDateString()}</li>` : ''}
+                      <li><strong>Next billing date:</strong> ${new Date(subscription.current_period_end * 1000).toLocaleDateString()}</li>
+                    </ul>
+                  </div>
+
+                  <p style="font-size: 16px; margin-bottom: 20px;">
+                    Start translating documents at your dashboard:
+                  </p>
+
+                  <div style="text-align: center; margin: 40px 0;">
+                    <a href="${APP_URL}/dashboard"
+                       style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                              color: white;
+                              padding: 16px 32px;
+                              text-decoration: none;
+                              border-radius: 8px;
+                              font-weight: 600;
+                              font-size: 16px;
+                              display: inline-block;">
+                      Go to Dashboard
+                    </a>
+                  </div>
+
+                  <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 40px 0;">
+
+                  <p style="font-size: 14px; color: #666;">
+                    Need help? Reply to this email or visit our support center.<br>
+                    We're here to help you succeed!
+                  </p>
+
+                  <p style="font-size: 14px; color: #999; margin-top: 40px;">
+                    - The Bridge Team
+                  </p>
+                </div>
+              </body>
+            </html>
+          `,
+        }),
+      });
+
+      console.log(`✅ Upgrade confirmation email sent to ${existingUser[0].email}`);
+    } catch (emailError: any) {
+      console.error('❌ Error sending upgrade email:', emailError.message);
+    }
+
+    return;
+  }
+
+  // LEGACY: Pay-first flow - check if user already exists (by email)
+  const existingUser = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
+  let userIdForEmail: string;
+
+  if (existingUser.length > 0) {
+    // User exists - update with Stripe info
+    userIdForEmail = existingUser[0].id;
+    await db
+      .update(user)
+      .set({
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        subscriptionStatus: subscription.status,
+        subscriptionPlan: planName,
+        subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
+        subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
+        trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+        translationLimit: translationLimit,
+        updatedAt: new Date(),
+      })
+      .where(eq(user.id, userIdForEmail));
+
+    console.log(`Updated existing user ${userIdForEmail} with Stripe subscription`);
   } else {
     // Create new user account using Better Auth (without password yet)
     const userName = email.split('@')[0]; // Use email prefix as default name
@@ -162,7 +283,7 @@ async function handleCheckoutCompleted(session: any) {
         },
       });
 
-      userId = result.user.id;
+      userIdForEmail = result.user.id;
 
       // Update user record with Stripe info and default role (Better Auth's createUser doesn't support these fields directly)
       await db
@@ -176,11 +297,12 @@ async function handleCheckoutCompleted(session: any) {
           subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
           subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
           trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+          translationLimit: translationLimit,
           updatedAt: new Date(),
         })
-        .where(eq(user.id, userId));
+        .where(eq(user.id, userIdForEmail));
 
-      console.log(`Created new user ${userId} for ${email} via Better Auth`);
+      console.log(`Created new user ${userIdForEmail} for ${email} via Better Auth`);
     } catch (createError: any) {
       console.error('Better Auth createUser failed:', createError);
       throw new Error(`Failed to create user: ${createError.message}`);
@@ -265,6 +387,7 @@ async function handleCheckoutCompleted(session: any) {
                 <h3 style="color: #333; font-size: 18px; margin-bottom: 15px;">Your Subscription Details</h3>
                 <ul style="font-size: 14px; color: #666; line-height: 2;">
                   <li><strong>Plan:</strong> ${planName.charAt(0).toUpperCase() + planName.slice(1)}</li>
+                  <li><strong>Translation Limit:</strong> ${translationLimit} per month</li>
                   <li><strong>Status:</strong> ${subscription.trial_end ? 'Free Trial' : 'Active'}</li>
                   ${subscription.trial_end ? `<li><strong>Trial ends:</strong> ${new Date(subscription.trial_end * 1000).toLocaleDateString()}</li>` : ''}
                   <li><strong>Next billing date:</strong> ${new Date(subscription.current_period_end * 1000).toLocaleDateString()}</li>
@@ -346,6 +469,9 @@ async function handleSubscriptionUpdated(subscriptionData: any) {
   if (priceId?.includes('pro')) planName = 'pro';
   if (priceId?.includes('enterprise')) planName = 'enterprise';
 
+  // Get translation limit for the new plan
+  const translationLimit = getTranslationLimit(planName);
+
   // Update subscription details
   await db
     .update(user)
@@ -355,11 +481,12 @@ async function handleSubscriptionUpdated(subscriptionData: any) {
       subscriptionStartDate: subscription.current_period_start ? new Date(subscription.current_period_start * 1000) : new Date(),
       subscriptionEndDate: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : new Date(),
       trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+      translationLimit: translationLimit, // Update limit when plan changes
       updatedAt: new Date(),
     })
     .where(eq(user.stripeCustomerId, customerId));
 
-  console.log(`✅ Updated subscription for user ${existingUser[0].id}`);
+  console.log(`✅ Updated subscription for user ${existingUser[0].id} to ${planName} plan with ${translationLimit} translations`);
 }
 
 /**
@@ -370,10 +497,13 @@ async function handleSubscriptionDeleted(subscription: any) {
 
   console.log(`❌ Subscription deleted for customer: ${customerId}`);
 
+  // Downgrade to free plan
   await db
     .update(user)
     .set({
       subscriptionStatus: 'canceled',
+      subscriptionPlan: 'free',
+      translationLimit: getTranslationLimit('free'), // Reset to free tier limit
       updatedAt: new Date(),
     })
     .where(eq(user.stripeCustomerId, customerId));

@@ -30,10 +30,14 @@ export const user = pgTable("user", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   subscriptionStatus: text("subscription_status"), // active, canceled, past_due, trialing, incomplete
-  subscriptionPlan: text("subscription_plan"), // starter, pro, enterprise
+  subscriptionPlan: text("subscription_plan").default("free"), // free, starter, pro, enterprise
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
   trialEndsAt: timestamp("trial_ends_at"),
+  // Translation Usage Tracking
+  translationCount: integer("translation_count").default(0).notNull(),
+  translationLimit: integer("translation_limit").default(5).notNull(),
+
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
