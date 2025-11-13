@@ -32,17 +32,17 @@ function getStripe(): Stripe {
 export const stripe = getStripe();
 
 /**
- * Stripe Price IDs (configure these in your Stripe Dashboard)
+ * Stripe Price IDs
+ * Updated: Nov 13, 2025
  *
- * To set up:
- * 1. Go to https://dashboard.stripe.com/products
- * 2. Create products with recurring prices
- * 3. Copy the price IDs (starting with price_) and add to .env.local
+ * Starter: $10/month - price_1SSphPGR3TRIHwfHDFqZV7fD
+ * Pro: $29/month - price_1SSphQGR3TRIHwfHytkuxp89
+ * Enterprise: Custom - price_1SSQydGR3TRIHwfHUmT7NXJf
  */
 export const STRIPE_PLANS = {
-  starter: process.env.STRIPE_PRICE_STARTER || 'price_starter_placeholder',
-  pro: process.env.STRIPE_PRICE_PRO || 'price_pro_placeholder',
-  enterprise: process.env.STRIPE_PRICE_ENTERPRISE || 'price_enterprise_placeholder',
+  starter: 'price_1SSphPGR3TRIHwfHDFqZV7fD', // $10/month
+  pro: 'price_1SSphQGR3TRIHwfHytkuxp89', // $29/month
+  enterprise: 'price_1SSQydGR3TRIHwfHUmT7NXJf', // Custom pricing
 } as const;
 
 export type StripePlanId = keyof typeof STRIPE_PLANS;
