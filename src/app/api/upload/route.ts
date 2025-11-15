@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate unique filename
-    const ext = file.name.split('.').pop();
-    const filename = `${nanoid()}.${ext}`;
+    const originalExtension = file.name.includes('.') ? file.name.split('.').pop() : null;
+    const filename = originalExtension ? `${nanoid()}.${originalExtension}` : nanoid();
 
     // Upload to Vercel Blob
     // In production, this requires BLOB_READ_WRITE_TOKEN env var
@@ -70,13 +70,14 @@ export async function POST(request: NextRequest) {
     }
 
     const blob = await put(filename, file, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
     });
 
     return NextResponse.json({
       url: blob.url,
       pathname: blob.pathname,
+      filename: file.name,
       contentType: blob.contentType,
       size: file.size,
       uploadedAt: new Date().toISOString(),

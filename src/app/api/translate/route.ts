@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { db } from '@/db';
 import { documents, results, user } from '@/db/schema';
 import { translateDocument, calculateConfidence } from '@/lib/openai';
@@ -17,7 +18,6 @@ interface TranslateRequest {
   fileSize: number;
   targetLang?: string;
   domain?: 'school' | 'healthcare' | 'legal' | 'government';
-  userId: string; // From auth session
 }
 
 export async function POST(request: NextRequest) {
@@ -32,11 +32,22 @@ export async function POST(request: NextRequest) {
       fileSize,
       targetLang = 'en',
       domain,
-      userId,
     } = body;
 
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          error: 'Unauthorized',
+          message: 'You must be signed in to translate documents.',
+        },
+        { status: 401 },
+      );
+    }
+
     // Validate required fields
-    if (!fileUrl || !filename || !userId) {
+    if (!fileUrl || !filename) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -63,6 +74,7 @@ export async function POST(request: NextRequest) {
         {
           error: 'Translation limit exceeded',
           message: `You have reached your translation limit of ${currentUser.translationLimit} translations. Please upgrade your plan to continue.`,
+          code: 'TRANSLATION_LIMIT_EXCEEDED',
           limit: currentUser.translationLimit,
           count: currentUser.translationCount,
           plan: currentUser.subscriptionPlan,
