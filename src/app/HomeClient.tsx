@@ -83,12 +83,13 @@ export default function HomeClient() {
     const selectedFiles = Array.from(e.target.files || []);
     if (!selectedFiles.length) return;
 
-    const nextItems = selectedFiles.map((selectedFile, index) => {
+    const nextItems: FileItem[] = selectedFiles.map((selectedFile, index) => {
       const validationError = validateFile(selectedFile);
+      const status: FileStatus = validationError ? 'error' : 'pending';
       return {
         id: `${selectedFile.name}-${index}-${generateId()}`,
         file: selectedFile,
-        status: validationError ? 'error' : 'pending',
+        status,
         error: validationError || undefined,
       };
     });
