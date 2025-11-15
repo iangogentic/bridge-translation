@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const blob = await put(filename, file, {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: false,
     });
 
